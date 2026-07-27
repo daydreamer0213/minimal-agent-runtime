@@ -4,13 +4,18 @@
   --surface: #f8faff;
   --surface-strong: #ffffff;
   --ink: #172033;
-  --muted: #69758a;
+  --muted: #4f5e76;
+  --muted-ink: #33415a;
   --line: #ccd5e2;
   --blue: #315ef6;
   --blue-soft: #e5ebff;
   --green: #168a72;
   --amber: #c47a13;
   --red: #c24b43;
+  --status-ready: #0f5f4e;
+  --status-busy: #8b5000;
+  --status-error: #8f241d;
+  --status-success: #0f674f;
   --shadow: 0 16px 46px rgb(28 45 75 / 12%);
 }
 
@@ -54,7 +59,7 @@ button {
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid #112f9b;
+  outline: 3px solid #173e8f;
   outline-offset: 2px;
 }
 
@@ -65,7 +70,7 @@ button:disabled {
 
 .shell {
   display: grid;
-  grid-template-columns: minmax(220px, 240px) minmax(360px, 1fr) minmax(280px, 320px);
+  grid-template-columns: minmax(220px, 240px) minmax(360px, 1fr) minmax(300px, 1fr);
   min-height: 100vh;
   width: 100%;
 }
@@ -231,7 +236,7 @@ textarea {
 
 .runtime-state {
   margin-top: 8px;
-  color: var(--green);
+  color: var(--status-ready);
   font: 700 11px/1 "Cascadia Code", Consolas, monospace;
 }
 
@@ -300,16 +305,16 @@ textarea {
 
 .status-message {
   min-height: 22px;
-  color: #243a5f;
+  color: var(--status-ready);
   font-size: 13px;
 }
 
 .status-message[data-state="error"] {
-  color: #9c2a22;
+  color: var(--status-error);
 }
 
 .status-message[data-state="ok"] {
-  color: var(--green);
+  color: var(--status-success);
 }
 
 .composer {
@@ -448,21 +453,21 @@ textarea {
 }
 
 .empty-state {
-  color: var(--muted);
+  color: var(--muted-ink);
   font-size: 13px;
 }
 
 .inspector-panel .empty-state {
-  color: #8997b2;
+  color: #bfd2f0;
 }
 
 .is-busy .runtime-state {
-  color: var(--amber);
+  color: var(--status-busy);
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1199px) and (min-width: 769px) {
   .shell {
-    grid-template-columns: minmax(220px, 1fr) minmax(260px, 360px);
+    grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
     grid-template-areas:
       "sessions chat"
       "inspector inspector";
@@ -477,7 +482,7 @@ textarea {
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 768px) {
   .shell {
     display: grid;
     grid-template-columns: 1fr;
@@ -542,5 +547,10 @@ textarea {
 
   button {
     transition: none;
+  }
+
+  button:hover,
+  button:focus-visible {
+    transform: none;
   }
 }

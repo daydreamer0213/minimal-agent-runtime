@@ -1,4 +1,4 @@
-"use strict";
+ï»¿"use strict";
 
 const ui = {
   sessionList: document.querySelector("#session-list"),
@@ -47,6 +47,7 @@ function setBusy(busy, message) {
   ui.chatInput.disabled = busy;
   ui.sendButton.disabled = busy;
   ui.newSessionTitle.disabled = busy;
+
   if (ui.newSessionSubmit) {
     ui.newSessionSubmit.disabled = busy;
   }
@@ -62,7 +63,7 @@ function setBusy(busy, message) {
   }
 
   if (message !== undefined) {
-    setState(message, busy ? "info" : "info");
+    setState(message, "info");
   }
 
   document.body.classList.toggle("is-busy", busy);
@@ -103,7 +104,7 @@ function renderSessions(sessions = [], currentSessionId) {
   ui.sessionList.replaceChildren();
 
   if (!sessions.length) {
-    renderEmpty(ui.sessionList, "µ±Ç°ÎÞ»á»°£¬ÇëÏÈ´´½¨");
+    renderEmpty(ui.sessionList, "å½“å‰æ— ä¼šè¯ï¼Œè¯·å…ˆåˆ›å»º");
     return;
   }
 
@@ -111,18 +112,16 @@ function renderSessions(sessions = [], currentSessionId) {
     const button = element("button", "session-item");
     button.type = "button";
     button.dataset.sessionId = session.id;
-    button.classList.toggle("active", session.id === currentSessionId);
-    button.setAttribute("aria-pressed", session.id === currentSessionId ? "true" : "false");
-    button.setAttribute("aria-current", session.id === currentSessionId ? "page" : "false");
+    const isActive = session.id === currentSessionId;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    button.setAttribute("aria-current", isActive ? "page" : "false");
+    button.disabled = page.busy;
     button.append(
-      element("strong", "", session.title || "(Î´ÃüÃû»á»°)"),
+      element("strong", "", session.title || "(æœªå‘½åä¼šè¯)"),
       element("span", "", session.id),
     );
     ui.sessionList.append(button);
-  }
-
-  for (const button of ui.sessionList.querySelectorAll("[data-session-id]")) {
-    button.disabled = page.busy;
   }
 }
 
@@ -130,13 +129,13 @@ function renderMessages(messages = []) {
   ui.chatList.replaceChildren();
 
   if (!messages.length) {
-    renderEmpty(ui.chatList, "»á»°ÖÐ»¹Ã»ÓÐÏûÏ¢¡£·¢ËÍÒ»Ìõ¿ªÊ¼½»Á÷¡£", false);
+    renderEmpty(ui.chatList, "ä¼šè¯ä¸­è¿˜æ²¡æœ‰æ¶ˆæ¯ã€‚å‘é€ä¸€æ¡å¼€å§‹äº¤æµã€‚", false);
     return;
   }
 
   for (const message of messages) {
     const role = formatRole(message.role);
-    const row = element("article", `message ${role === "YOU" ? "user" : ""}");
+    const row = element("article", `message ${role === "YOU" ? "user" : ""}`);
     row.append(
       element("strong", "message-role", role),
       element("p", "message-content", message.content || ""),
@@ -151,7 +150,7 @@ function renderTraces(traces = []) {
   ui.traceList.replaceChildren();
 
   if (!traces.length) {
-    renderEmpty(ui.traceList, "ÔÝÎÞ trace£ºµÈ´ý Agent Íê³ÉÒ»´ÎÑ­»·¡£", false);
+    renderEmpty(ui.traceList, "æš‚æ—  traceï¼šç­‰å¾… Agent å®Œæˆä¸€æ¬¡å¾ªçŽ¯ã€‚", false);
     return;
   }
 
@@ -164,7 +163,7 @@ function renderTraces(traces = []) {
     const heading = element("div", "trace-heading");
     heading.append(
       element("strong", "", traceLabel(trace.event)),
-      element("span", "", `step ${trace.step} ¡¤ ${trace.duration_ms ?? "?"}ms`),
+      element("span", "", `step ${trace.step} Â· ${trace.duration_ms ?? "?"}ms`),
     );
 
     const data = element("pre", "trace-data");
@@ -180,14 +179,14 @@ function renderTodos(todos = []) {
   ui.todoList.replaceChildren();
 
   if (!todos.length) {
-    renderEmpty(ui.todoList, "µ±Ç° session ÔÝÎÞ´ý°ì¡£", true);
+    renderEmpty(ui.todoList, "å½“å‰ session æš‚æ— å¾…åŠžã€‚", true);
     return;
   }
 
   for (const todo of todos) {
     const row = element("li", todo.done ? "done" : "");
     row.append(
-      element("span", "todo-status", todo.done ? "Íê³É" : "´ý°ì"),
+      element("span", "todo-status", todo.done ? "å®Œæˆ" : "å¾…åŠž"),
       element("span", "", todo.text),
     );
     ui.todoList.append(row);
@@ -195,15 +194,15 @@ function renderTodos(todos = []) {
 }
 
 function render(state) {
-  const sessions = Array.isArray(state.sessions) ? state.sessions : [];
-  const messages = Array.isArray(state.messages) ? state.messages : [];
-  const traces = Array.isArray(state.traces) ? state.traces : [];
-  const todos = Array.isArray(state.todos) ? state.todos : [];
+  const sessions = state.sessions;
+  const messages = state.messages;
+  const traces = state.traces;
+  const todos = state.todos;
 
   page.sessionId = state.current_session_id || null;
   const active = sessions.find((item) => item.id === page.sessionId);
 
-  setText(ui.currentSession, active ? active.title || active.id : "Î´Ñ¡Ôñ»á»°");
+  setText(ui.currentSession, active ? active.title || active.id : "æœªé€‰æ‹©ä¼šè¯");
   setRuntimeState("Agent loop: ready");
   renderSessions(sessions, page.sessionId);
   renderMessages(messages);
@@ -219,15 +218,35 @@ function setRuntimeState(text) {
 }
 
 function parseJsonSafely(text, label) {
-  if (!text) {
-    throw new Error(`${label}: empty response body`);
-  }
-
   try {
     return JSON.parse(text);
   } catch (error) {
     throw new Error(`${label}: invalid JSON`);
   }
+}
+
+function ensureStatePayload(payload, actionLabel) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error(`${actionLabel} å¤±è´¥ï¼šå“åº”ä¸æ˜¯åˆæ³• JSONã€‚`);
+  }
+
+  const state = payload.state;
+  if (!state || typeof state !== "object" || Array.isArray(state)) {
+    throw new Error(`${actionLabel} å¤±è´¥ï¼šå“åº”ç¼ºå°‘ stateã€‚`);
+  }
+
+  if (typeof state.current_session_id !== "string" || state.current_session_id.length === 0) {
+    throw new Error(`${actionLabel} å¤±è´¥ï¼šcurrent_session_id æ— æ•ˆã€‚`);
+  }
+
+  const requiredArrays = ["sessions", "messages", "traces", "todos"];
+  for (const key of requiredArrays) {
+    if (!Array.isArray(state[key])) {
+      throw new Error(`${actionLabel} å¤±è´¥ï¼šstate.${key} éžæ•°ç»„ã€‚`);
+    }
+  }
+
+  return state;
 }
 
 async function request(path, options = {}) {
@@ -237,15 +256,16 @@ async function request(path, options = {}) {
   });
 
   const bodyText = await response.text();
-  let payload;
+  let payload = {};
 
-  try {
-    payload = parseJsonSafely(bodyText, `${path}`);
-  } catch (error) {
-    if (response.ok) {
-      throw error;
+  if (bodyText) {
+    try {
+      payload = parseJsonSafely(bodyText, path);
+    } catch (error) {
+      if (response.ok) {
+        throw error;
+      }
     }
-    payload = {};
   }
 
   if (!response.ok) {
@@ -256,32 +276,21 @@ async function request(path, options = {}) {
   return payload;
 }
 
-function ensureStatePayload(payload, actionLabel) {
-  if (!payload || typeof payload !== "object") {
-    throw new Error(`${actionLabel} Ê§°Ü£ºÏìÓ¦²»ÊÇºÏ·¨ JSON`);
-  }
-
-  if (!payload.state || typeof payload.state !== "object") {
-    throw new Error(`${actionLabel} Ê§°Ü£ºÏìÓ¦È±ÉÙ state`);
-  }
-
-  return payload.state;
-}
-
 function describeBusyError(error) {
-  const text = (error && error.message ? error.message : String(error || "Î´Öª´íÎó")).trim();
+  const text = (error && error.message ? error.message : String(error || "æœªçŸ¥é”™è¯¯")).trim();
   if (text.includes("session")) {
-    return `${text}£¬ÇëÏÈ´´½¨»òÑ¡ÔñÒ»¸ö»á»°¡£`;
+    return `${text}ï¼Œè¯·å…ˆåˆ›å»ºæˆ–é€‰æ‹©ä¸€ä¸ªä¼šè¯ã€‚`;
   }
   if (text.includes("400") || text.includes("Bad Request")) {
-    return `${text}£¬Çë¼ì²éÊäÈëÊÇ·ñÍêÕû¡£`;
+    return `${text}ï¼Œè¯·æ£€æŸ¥è¾“å…¥æ˜¯å¦å®Œæ•´ã€‚`;
   }
-  return text || "ÇëÇóÊ§°Ü£¬ÇëÉÔºóÖØÊÔ¡£";
+  return text || "è¯·æ±‚å¤±è´¥ï¼Œè¯·ç¨åŽé‡è¯•ã€‚";
 }
 
 async function refresh(sessionId = null) {
   const query = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : "";
-  const state = await request(`/api/state${query}`);
+  const payload = await request(`/api/state${query}`);
+  const state = ensureStatePayload(payload, "çŠ¶æ€åˆ·æ–°");
   render(state);
   return state;
 }
@@ -296,7 +305,7 @@ function onSessionClick(event) {
     return;
   }
 
-  setBusy(true, "ÕýÔÚÇÐ»»»á»°...");
+  setBusy(true, "æ­£åœ¨åˆ‡æ¢ä¼šè¯...");
   refresh(sessionId)
     .then(() => {
       setState("");
@@ -324,20 +333,20 @@ async function createSession(event) {
 
   const title = ui.newSessionTitle.value.trim();
   if (!title) {
-    setState("ÇëÊäÈë»á»°±êÌâ¡£", "error");
+    setState("è¯·è¾“å…¥ä¼šè¯æ ‡é¢˜ã€‚", "error");
     return;
   }
 
   try {
-    setBusy(true, "ÕýÔÚ´´½¨»á»°...");
+    setBusy(true, "æ­£åœ¨åˆ›å»ºä¼šè¯...");
     const payload = await request("/api/sessions", {
       method: "POST",
       body: JSON.stringify({ title }),
     });
-    const state = ensureStatePayload(payload, "»á»°´´½¨");
+    const state = ensureStatePayload(payload, "ä¼šè¯åˆ›å»º");
     render(state);
     ui.newSessionTitle.value = "";
-    setState("»á»°´´½¨³É¹¦¡£", "ok");
+    setState("ä¼šè¯åˆ›å»ºæˆåŠŸã€‚", "ok");
   } catch (error) {
     setState(describeBusyError(error), "error");
   } finally {
@@ -351,18 +360,18 @@ async function sendMessage(event) {
     return;
   }
   if (!page.sessionId) {
-    setState("ÇëÏÈÑ¡Ôñ»ò´´½¨»á»°£¬ÔÙ·¢ËÍÏûÏ¢¡£", "error");
+    setState("è¯·å…ˆé€‰æ‹©æˆ–åˆ›å»ºä¼šè¯ï¼Œå†å‘é€æ¶ˆæ¯ã€‚", "error");
     return;
   }
 
   const message = ui.chatInput.value.trim();
   if (!message) {
-    setState("ÇëÊäÈëÏûÏ¢ÄÚÈÝ¡£", "error");
+    setState("è¯·è¾“å…¥æ¶ˆæ¯å†…å®¹ã€‚", "error");
     return;
   }
 
   try {
-    setBusy(true, "Agent ÕýÔÚ´¦ÀíÖÐ...");
+    setBusy(true, "Agent æ­£åœ¨å¤„ç†ä¸­...");
     const payload = await request("/api/chat", {
       method: "POST",
       body: JSON.stringify({
@@ -370,10 +379,10 @@ async function sendMessage(event) {
         message,
       }),
     });
-    const state = ensureStatePayload(payload, "ÁÄÌì");
+    const state = ensureStatePayload(payload, "èŠå¤©");
     ui.chatInput.value = "";
     render(state);
-    setState("ÒÑÍê³É£ºÊÕµ½»Ø¸´¡£", "ok");
+    setState("å·²å®Œæˆï¼šæ”¶åˆ°å›žå¤ã€‚", "ok");
   } catch (error) {
     setState(describeBusyError(error), "error");
   } finally {
@@ -406,8 +415,8 @@ ui.quickPrompts.addEventListener("click", onQuickPrompt);
 ui.chatForm.addEventListener("submit", sendMessage);
 ui.chatInput.addEventListener("keydown", onChatKeydown);
 
-setState("¼ÓÔØ»á»°ÖÐ...");
-setBusy(true, "¼ÓÔØ»á»°ÖÐ...");
+setState("åŠ è½½ä¼šè¯ä¸­...");
+setBusy(true, "åŠ è½½ä¼šè¯ä¸­...");
 refresh()
   .then(() => {
     setState("", "ok");
