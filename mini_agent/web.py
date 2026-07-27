@@ -46,6 +46,7 @@ class AgentHTTPServer(ThreadingHTTPServer):
         self.runtime_factory = runtime_factory
         self.environment = environment
         self.chat_lock = threading.Lock()
+        self.state_lock = threading.RLock()
         super().__init__(address, AgentRequestHandler)
 
 
@@ -60,6 +61,7 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
 
     def _guard(self, action: Callable[[], None]) -> None:
         try:
+            self._validate_local_request()
             action()
         except RequestProblem as error:
             self._json(error.status, {"error": str(error)})
@@ -73,12 +75,40 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             )
             self._json(500, {"error": "本地 Agent 服务发生未预期错误"})
 
+    def _validate_local_request(self) -> None:
+        port = self.server.server_port
+        local_hosts = {
+            f"127.0.0.1:{port}",
+            f"localhost:{port}",
+            f"[::1]:{port}",
+        }
+        host = self.headers.get("Host", "").lower()
+        if host not in local_hosts:
+            raise RequestProblem(403, "请求必须使用本地 Host")
+
+        origin = self.headers.get("Origin")
+        local_origins = {f"http://{value}" for value in local_hosts}
+        if origin is not None and origin.lower() not in local_origins:
+            raise RequestProblem(403, "请求来源不受允许")
+
     def _get(self) -> None:
         parsed = urlsplit(self.path)
         if parsed.path == "/api/state":
-            requested = parse_qs(parsed.query).get("session_id", [None])[0]
-            with self._store() as store:
-                self._json(200, self._state(store, requested))
+            session_ids = parse_qs(
+                parsed.query,
+                keep_blank_values=True,
+            ).get("session_id")
+            if session_ids is None:
+                requested = None
+            elif len(session_ids) != 1:
+                raise RequestProblem(400, "session_id 只能出现一次")
+            elif not session_ids[0]:
+                raise RequestProblem(404, "session 不存在")
+            else:
+                requested = session_ids[0]
+            with self.server.state_lock:
+                with self._store() as store:
+                    self._json(200, self._state(store, requested))
             return
         static = STATIC_FILES.get(parsed.path)
         if static is None or parsed.query:
@@ -95,6 +125,9 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path != "/api/sessions":
             raise RequestProblem(404, "API 不存在")
+        content_type = self.headers.get("Content-Type", "")
+        if content_type.split(";", 1)[0].strip().lower() != "application/json":
+            raise RequestProblem(415, "Content-Type 必须是 application/json")
         payload = self._read_json()
         title = payload.get("title", "")
         if not isinstance(title, str):
@@ -113,6 +146,8 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             length = int(raw_length)
         except ValueError as error:
             raise RequestProblem(400, "Content-Length 无效") from error
+        if length < 0:
+            raise RequestProblem(400, "Content-Length 不能为负数")
         if length > MAX_BODY_BYTES:
             raise RequestProblem(413, "请求正文超过 32 KiB")
         try:
@@ -128,16 +163,17 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
         store: SessionStore,
         requested_session_id: str | None,
     ) -> dict[str, Any]:
-        sessions = store.list_sessions()
-        if requested_session_id is not None:
-            if not store.session_exists(requested_session_id):
-                raise RequestProblem(404, "session 不存在")
-            current_id = requested_session_id
-        elif sessions:
-            current_id = sessions[0]["id"]
-        else:
-            current_id = store.create_session("网页演示")
+        with self.server.state_lock:
             sessions = store.list_sessions()
+            if requested_session_id is not None:
+                if not store.session_exists(requested_session_id):
+                    raise RequestProblem(404, "session 不存在")
+                current_id = requested_session_id
+            elif sessions:
+                current_id = sessions[0]["id"]
+            else:
+                current_id = store.create_session("网页演示")
+                sessions = store.list_sessions()
 
         messages = [
             {
@@ -219,11 +255,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.host not in {"127.0.0.1", "localhost", "::1"}:
         print("Warning: the demo is listening beyond this computer.")
     print(f"Minimal Agent web: {url}")
-    if not args.no_browser:
-        opener = threading.Timer(0.25, webbrowser.open, args=(url,))
-        opener.daemon = True
-        opener.start()
     try:
+        if not args.no_browser:
+            opener = threading.Timer(0.25, webbrowser.open, args=(url,))
+            opener.daemon = True
+            opener.start()
         server.serve_forever()
     except KeyboardInterrupt:
         print()
