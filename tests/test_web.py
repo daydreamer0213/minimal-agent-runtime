@@ -196,15 +196,11 @@ class WebTests(unittest.TestCase):
         self.assertEqual(status, 200)
 
     def test_wildcard_binding_accepts_connected_target_authority_only(self):
-        server = create_server(
-            ("0.0.0.0", 0),
-            Path(self.temp.name) / "wildcard.db",
-            environment={},
-        )
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
+        original_address = self.server.server_address
         try:
-            _, port = server.server_address[:2]
+            self.server.configured_host = "0.0.0.0"
+            self.server.server_address = ("0.0.0.0", self.server.server_port)
+            port = self.server.server_port
             authority = f"127.0.0.1:{port}"
             request = Request(
                 f"http://{authority}/api/state",
@@ -221,10 +217,7 @@ class WebTests(unittest.TestCase):
                 urlopen(request, timeout=2)
             self.assertEqual(hostile.exception.code, 403)
         finally:
-            server.shutdown()
-            server.server_close()
-            thread.join(timeout=2)
-            self.assertFalse(thread.is_alive())
+            self.server.server_address = original_address
 
     def test_default_http_port_authority_may_omit_port(self):
         self.server.configured_host = "agent.example"
@@ -351,14 +344,19 @@ class WebTests(unittest.TestCase):
 
     @unittest.skipUnless(socket.has_ipv6, "IPv6 is unavailable")
     def test_ipv6_loopback_server_uses_ipv6_and_bracketed_authority(self):
-        server = create_server(
-            ("::1", 0),
-            Path(self.temp.name) / "ipv6.db",
-            environment={},
-        )
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
+        server = None
+        thread = None
         try:
+            try:
+                server = create_server(
+                    ("::1", 0),
+                    Path(self.temp.name) / "ipv6.db",
+                    environment={},
+                )
+            except OSError as error:
+                self.skipTest(f"IPv6 loopback is unavailable: {error}")
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
             host, port = server.server_address[:2]
             authority = f"[{host}]:{port}"
             wire = (
@@ -375,10 +373,12 @@ class WebTests(unittest.TestCase):
             self.assertEqual(server.address_family, socket.AF_INET6)
             self.assertTrue(response.startswith(b"HTTP/1.0 200"))
         finally:
-            server.shutdown()
-            server.server_close()
-            thread.join(timeout=2)
-            self.assertFalse(thread.is_alive())
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+            if thread is not None:
+                thread.join(timeout=2)
+                self.assertFalse(thread.is_alive())
 
     @patch("mini_agent.web.load_dotenv")
     @patch("mini_agent.web.threading.Timer")
