@@ -64,7 +64,7 @@ class AgentRuntime:
                 )
                 raise AgentError(
                     f"模型调用失败: {type(error).__name__}"
-                ) from error
+                ) from None
 
             self.store.add_trace(
                 session_id,

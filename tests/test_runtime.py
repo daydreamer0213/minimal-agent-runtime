@@ -1,4 +1,5 @@
 import tempfile
+import traceback
 import unittest
 from pathlib import Path
 
@@ -288,14 +289,20 @@ class RuntimeTests(unittest.TestCase):
         secret = "secret-token-must-not-be-traced"
         runtime, _ = self.runtime([RuntimeError(secret)])
 
-        with self.assertRaises(AgentError) as raised:
+        try:
             runtime.run(self.session, "触发错误")
+        except AgentError as error:
+            formatted_traceback = "".join(traceback.format_exception(error))
+            self.assertEqual(str(error), "模型调用失败: RuntimeError")
+            self.assertNotIn(secret, str(error))
+        else:
+            self.fail("AgentError not raised")
 
-        self.assertNotIn(secret, str(raised.exception))
         trace = self.store.list_traces(self.session)[0]
         self.assertEqual(trace["event"], "runtime_error")
         self.assertEqual(trace["data"]["stage"], "model")
         self.assertNotIn(secret, str(trace["data"]))
+        self.assertNotIn(secret, formatted_traceback)
 
 
 if __name__ == "__main__":
