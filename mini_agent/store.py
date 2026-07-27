@@ -165,6 +165,27 @@ class SessionStore:
             messages.append(message)
         return messages
 
+    def list_messages(
+        self,
+        session_id: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        rows = self.connection.execute(
+            """
+            SELECT * FROM (
+                SELECT * FROM messages
+                WHERE session_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+            )
+            ORDER BY id
+            """,
+            (session_id, limit),
+        ).fetchall()
+        return [self._message_dict(row) for row in rows]
+
     def add_todo(self, session_id: str, text: str) -> dict[str, Any]:
         now = _now()
         with self.connection:

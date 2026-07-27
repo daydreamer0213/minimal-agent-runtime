@@ -66,6 +66,32 @@ class StoreTests(unittest.TestCase):
             ["问题 4", "回答 4", "后台事件"],
         )
 
+    def test_list_messages_returns_recent_audit_history_in_display_order(self):
+        session_id = self.store.create_session("网页", "web")
+        for turn in range(1, 4):
+            self.store.add_message(session_id, turn, "user", f"问题 {turn}")
+            self.store.add_message(session_id, turn, "assistant", f"回答 {turn}")
+        rows = self.store.compactable_messages(session_id, keep_user_turns=1)
+        self.store.save_summary_and_compact(
+            session_id,
+            "旧内容摘要",
+            [row["id"] for row in rows],
+        )
+
+        messages = self.store.list_messages(session_id, limit=3)
+
+        self.assertEqual(
+            [message["content"] for message in messages],
+            ["回答 2", "问题 3", "回答 3"],
+        )
+        self.assertTrue(messages[0]["compacted"])
+
+    def test_list_messages_rejects_non_positive_limit(self):
+        session_id = self.store.create_session("网页", "web")
+
+        with self.assertRaisesRegex(ValueError, "limit must be positive"):
+            self.store.list_messages(session_id, limit=0)
+
     def test_trace_is_filtered_by_session(self):
         first = self.store.create_session("一", "one")
         second = self.store.create_session("二", "two")
