@@ -108,6 +108,8 @@ class DeepSeekClient:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
+        if max_retries < 0:
+            raise ValueError("max_retries must be non-negative")
         self.max_retries = max_retries
 
     def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> LLMResponse:
@@ -121,15 +123,18 @@ class DeepSeekClient:
         if tools:
             body["tools"] = tools
 
-        request = Request(
-            f"{self.base_url}/chat/completions",
-            data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
-            method="POST",
-        )
+        try:
+            request = Request(
+                f"{self.base_url}/chat/completions",
+                data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+                method="POST",
+            )
+        except (TypeError, ValueError) as error:
+            raise LLMError("DeepSeek request could not be encoded") from error
         return self._send(request)
 
     def _send(self, request: Request) -> LLMResponse:

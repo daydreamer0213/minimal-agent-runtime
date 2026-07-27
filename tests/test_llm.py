@@ -183,6 +183,14 @@ class LLMTests(unittest.TestCase):
 
         self.assertEqual(urlopen.call_count, 1)
 
+    def test_client_wraps_request_serialization_errors(self):
+        with self.assertRaises(LLMError):
+            DeepSeekClient("secret").chat([{"role": "user", "content": object()}], [])
+
+    def test_client_rejects_negative_retry_limits(self):
+        with self.assertRaises(ValueError):
+            DeepSeekClient("secret", max_retries=-1)
+
 
 if __name__ == "__main__":
     unittest.main()
