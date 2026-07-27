@@ -226,10 +226,12 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
         if isinstance(value, list):
             return [self._safe_value(item) for item in value]
         if isinstance(value, dict):
-            return {
-                str(name): self._safe_value(item)
-                for name, item in value.items()
-            }
+            safe_data = {}
+            for name, item in value.items():
+                safe_name = safe_text(str(name), key)[:2000]
+                if safe_name not in safe_data:
+                    safe_data[safe_name] = self._safe_value(item)
+            return safe_data
         return value
 
     def _state(

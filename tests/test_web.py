@@ -207,15 +207,55 @@ class WebTests(unittest.TestCase):
         self.assertEqual(empty.exception.code, 400)
         self.assertEqual(self.runtime_calls, 0)
 
-        oversized = Request(
-            self.base_url + "/api/chat",
-            data=b"x" * (32 * 1024 + 1),
-            headers={"Content-Type": "application/json"},
-            method="POST",
+        oversized = b"x" * (32 * 1024 + 1)
+        status, _ = self.raw_post(
+            "/api/chat",
+            oversized,
+            {
+                "Content-Type": "application/json",
+                "Content-Length": str(len(oversized)),
+            },
         )
-        with self.assertRaises(HTTPError) as too_large:
-            urlopen(oversized, timeout=2)
-        self.assertEqual(too_large.exception.code, 413)
+        self.assertEqual(status, 413)
+
+    def test_chat_rejects_invalid_values_without_running_runtime(self):
+        invalid_payloads = [
+            {"session_id": "", "message": "你好"},
+            {"session_id": 1, "message": "你好"},
+            {"session_id": "missing", "message": 1},
+        ]
+
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload), self.assertRaises(HTTPError) as invalid:
+                self.request("/api/chat", method="POST", payload=payload)
+            self.assertEqual(invalid.exception.code, 400)
+
+        self.assertEqual(self.runtime_calls, 0)
+
+    def test_chat_rejects_unknown_session_without_running_runtime(self):
+        with self.assertRaises(HTTPError) as unknown:
+            self.request(
+                "/api/chat",
+                method="POST",
+                payload={"session_id": "missing", "message": "你好"},
+            )
+
+        self.assertEqual(unknown.exception.code, 404)
+        self.assertEqual(self.runtime_calls, 0)
+
+    def test_chat_requires_json_content_type_without_running_runtime(self):
+        body = b'{"session_id":"missing","message":"hello"}'
+        status, _ = self.raw_post(
+            "/api/chat",
+            body,
+            {
+                "Content-Type": "text/plain",
+                "Content-Length": str(len(body)),
+            },
+        )
+
+        self.assertEqual(status, 415)
+        self.assertEqual(self.runtime_calls, 0)
 
     def test_missing_key_and_runtime_errors_are_sanitized(self):
         self.server.environment = {}
@@ -242,7 +282,28 @@ class WebTests(unittest.TestCase):
         self.assertNotIn("secret-key", error_body)
         self.assertNotIn("Traceback", error_body)
 
-    def test_state_redacts_the_key_from_nested_trace_data(self):
+    def test_unexpected_factory_errors_are_sanitized(self):
+        _, body, _ = self.request("/api/state")
+        session_id = json.loads(body)["current_session_id"]
+        self.server.environment = {"DEEPSEEK_API_KEY": "factory-key"}
+
+        def unexpected_factory(*_):
+            raise RuntimeError("factory-key must not reach browser")
+
+        self.server.runtime_factory = unexpected_factory
+        with self.assertRaises(HTTPError) as failed:
+            self.request(
+                "/api/chat",
+                method="POST",
+                payload={"session_id": session_id, "message": "触发错误"},
+            )
+
+        error_body = failed.exception.read().decode("utf-8")
+        self.assertEqual(failed.exception.code, 500)
+        self.assertNotIn("factory-key", error_body)
+        self.assertNotIn("Traceback", error_body)
+
+    def test_state_recursively_redacts_trace_keys_and_values(self):
         _, body, _ = self.request("/api/state")
         session_id = json.loads(body)["current_session_id"]
         store = SessionStore(self.db_path)
@@ -251,7 +312,16 @@ class WebTests(unittest.TestCase):
                 session_id,
                 1,
                 "tool",
-                {"result": {"message": "test-key must not reach browser"}},
+                {
+                    "test-key": "first value",
+                    "[redacted]": "second value",
+                    "nested": [
+                        "test-key in a list",
+                        {"nested-test-key": "test-key in a value"},
+                    ],
+                    "long": "x" * 2001,
+                    "count": 7,
+                },
             )
         finally:
             store.close()
@@ -259,9 +329,17 @@ class WebTests(unittest.TestCase):
         _, state_body, _ = self.request(
             f"/api/state?session_id={session_id}"
         )
+        trace_data = json.loads(state_body)["traces"][0]["data"]
 
         self.assertNotIn("test-key", state_body.decode("utf-8"))
-        self.assertIn("[redacted]", state_body.decode("utf-8"))
+        self.assertEqual(trace_data["[redacted]"], "first value")
+        self.assertEqual(trace_data["nested"][0], "[redacted] in a list")
+        self.assertEqual(
+            trace_data["nested"][1]["nested-[redacted]"],
+            "[redacted] in a value",
+        )
+        self.assertEqual(len(trace_data["long"]), 2000)
+        self.assertEqual(trace_data["count"], 7)
 
     def test_state_rejects_unknown_session(self):
         with self.assertRaises(HTTPError) as unknown:
