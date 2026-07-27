@@ -229,7 +229,7 @@ class SessionStore:
             kept_turns = self.connection.execute(
                 """
                 SELECT turn_id FROM messages
-                WHERE session_id = ? AND compacted = 0 AND role = 'user'
+                WHERE session_id = ? AND compacted = 0
                 GROUP BY turn_id
                 ORDER BY turn_id DESC
                 LIMIT ?

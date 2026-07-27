@@ -51,6 +51,7 @@ class StoreTests(unittest.TestCase):
         for turn in range(1, 5):
             self.store.add_message(session_id, turn, "user", f"问题 {turn}")
             self.store.add_message(session_id, turn, "assistant", f"回答 {turn}")
+        self.store.add_message(session_id, 5, "assistant", "后台事件")
 
         rows = self.store.compactable_messages(session_id, keep_user_turns=2)
         self.store.save_summary_and_compact(
@@ -62,7 +63,7 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(self.store.get_summary(session_id), "前两轮摘要")
         self.assertEqual(
             [message["content"] for message in self.store.context_messages(session_id)],
-            ["问题 3", "回答 3", "问题 4", "回答 4"],
+            ["问题 4", "回答 4", "后台事件"],
         )
 
     def test_trace_is_filtered_by_session(self):
