@@ -87,6 +87,17 @@ class LLMTests(unittest.TestCase):
                 with self.assertRaises(LLMError):
                     parse_response(payload)
 
+    def test_parser_rejects_duplicate_tool_call_ids(self):
+        payload = {
+            "choices": [{"message": {"tool_calls": [
+                {"id": "call_1", "function": {"name": "calculator", "arguments": "{}"}},
+                {"id": "call_1", "function": {"name": "weather", "arguments": "{}"}},
+            ]}}]
+        }
+
+        with self.assertRaisesRegex(LLMError, "重复"):
+            parse_response(payload)
+
     @patch("mini_agent.llm.urlopen")
     def test_client_sends_deepseek_configuration(self, urlopen):
         urlopen.return_value = FakeHTTPResponse({

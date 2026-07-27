@@ -75,6 +75,7 @@ def _parse_tool_calls(value: Any) -> list[ToolCall]:
         raise LLMError("模型响应的 tool_calls 必须是列表")
 
     calls = []
+    seen_ids = set()
     for item in value:
         if not isinstance(item, dict):
             raise LLMError("模型响应包含无效工具调用")
@@ -89,6 +90,9 @@ def _parse_tool_calls(value: Any) -> list[ToolCall]:
             or not isinstance(function.get("arguments"), str)
         ):
             raise LLMError("模型响应包含无效工具调用")
+        if call_id in seen_ids:
+            raise LLMError("模型响应包含重复工具调用 ID")
+        seen_ids.add(call_id)
         calls.append(ToolCall(call_id, function["name"], function["arguments"]))
     return calls
 
