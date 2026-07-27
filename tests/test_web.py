@@ -14,6 +14,22 @@ from mini_agent.store import SessionStore
 from mini_agent.web import AgentRequestHandler, create_server, main
 
 
+class TrackingLock:
+    def __init__(self):
+        self.depth = 0
+
+    @property
+    def held(self):
+        return self.depth > 0
+
+    def __enter__(self):
+        self.depth += 1
+        return self
+
+    def __exit__(self, *_):
+        self.depth -= 1
+
+
 class WebTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -165,6 +181,29 @@ class WebTests(unittest.TestCase):
         self.assertEqual(response.exception.code, 403)
         self.assertNotIn(b"evil.invalid", response.exception.read())
 
+    def test_configured_host_and_port_are_accepted(self):
+        self.server.configured_host = "agent.example"
+        authority = f"agent.example:{self.server.server_port}"
+
+        status, _, _ = self.request(
+            "/api/state",
+            headers={
+                "Host": authority,
+                "Origin": f"http://{authority}",
+            },
+        )
+
+        self.assertEqual(status, 200)
+
+    def test_default_http_port_authority_may_omit_port(self):
+        self.server.configured_host = "agent.example"
+        self.server.server_port = 80
+
+        authorities = self.server.allowed_authorities()
+
+        self.assertIn("agent.example", authorities)
+        self.assertIn("agent.example:80", authorities)
+
     def test_mismatched_origin_is_rejected(self):
         with self.assertRaises(HTTPError) as response:
             self.request(
@@ -263,6 +302,22 @@ class WebTests(unittest.TestCase):
         finally:
             store.close()
 
+    def test_state_releases_lock_before_writing_response(self):
+        tracking_lock = TrackingLock()
+        writes_while_locked = []
+        original_json = AgentRequestHandler._json
+        self.server.state_lock = tracking_lock
+
+        def record_json(handler, status, payload):
+            writes_while_locked.append(tracking_lock.held)
+            return original_json(handler, status, payload)
+
+        with patch.object(AgentRequestHandler, "_json", new=record_json):
+            status, _, _ = self.request("/api/state")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(writes_while_locked, [False])
+
     @patch("mini_agent.web.load_dotenv")
     @patch("mini_agent.web.threading.Timer")
     @patch("mini_agent.web.create_server")
@@ -293,21 +348,86 @@ class WebTests(unittest.TestCase):
         server.server_close.assert_called_once_with()
 
     @patch("mini_agent.web.load_dotenv")
+    @patch("mini_agent.web.create_server")
+    def test_main_keeps_explicit_host_and_port(
+        self,
+        server_factory,
+        _load_dotenv,
+    ):
+        server = Mock()
+        server.server_port = 9012
+        server.serve_forever.side_effect = KeyboardInterrupt
+        server_factory.return_value = server
+
+        exit_code = main(
+            [
+                "--db",
+                str(self.db_path),
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "9012",
+                "--no-browser",
+            ]
+        )
+
+        self.assertEqual(exit_code, 0)
+        server_factory.assert_called_once_with(
+            ("0.0.0.0", 9012),
+            str(self.db_path),
+        )
+        server.server_close.assert_called_once_with()
+
+    @patch("builtins.print")
+    @patch("mini_agent.web.load_dotenv")
     @patch("mini_agent.web.threading.Timer", side_effect=RuntimeError("timer failed"))
     @patch("mini_agent.web.create_server")
-    def test_main_closes_server_when_browser_timer_fails(
+    def test_main_serves_when_browser_timer_construction_fails(
         self,
         server_factory,
         _timer_class,
         _load_dotenv,
+        print_mock,
     ):
         server = Mock()
         server.server_port = 8123
+        server.serve_forever.side_effect = KeyboardInterrupt
         server_factory.return_value = server
 
-        with self.assertRaisesRegex(RuntimeError, "timer failed"):
-            main(["--db", str(self.db_path)])
+        exit_code = main(["--db", str(self.db_path)])
+
+        self.assertEqual(exit_code, 0)
+        server.serve_forever.assert_called_once_with()
         server.server_close.assert_called_once_with()
+        messages = [str(call.args[0]) for call in print_mock.call_args_list if call.args]
+        self.assertIn("Warning: browser could not be opened.", messages)
+        self.assertNotIn("timer failed", "\n".join(messages))
+
+    @patch("builtins.print")
+    @patch("mini_agent.web.load_dotenv")
+    @patch("mini_agent.web.threading.Timer")
+    @patch("mini_agent.web.create_server")
+    def test_main_serves_when_browser_timer_start_fails(
+        self,
+        server_factory,
+        timer_class,
+        _load_dotenv,
+        print_mock,
+    ):
+        server = Mock()
+        server.server_port = 8123
+        server.serve_forever.side_effect = KeyboardInterrupt
+        timer_class.return_value.start.side_effect = RuntimeError("timer failed")
+        server_factory.return_value = server
+
+        exit_code = main(["--db", str(self.db_path)])
+
+        self.assertEqual(exit_code, 0)
+        server.serve_forever.assert_called_once_with()
+        server.server_close.assert_called_once_with()
+        messages = [str(call.args[0]) for call in print_mock.call_args_list if call.args]
+        self.assertIn("Warning: browser could not be opened.", messages)
+        self.assertNotIn("timer failed", "\n".join(messages))
 
 
 if __name__ == "__main__":

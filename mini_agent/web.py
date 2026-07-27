@@ -26,6 +26,16 @@ STATIC_FILES = {
 }
 
 
+def _authorities_for(host: str, port: int) -> set[str]:
+    host = host.lower()
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    authorities = {f"{host}:{port}"}
+    if port == 80:
+        authorities.add(host)
+    return authorities
+
+
 class RequestProblem(Exception):
     def __init__(self, status: int, message: str):
         super().__init__(message)
@@ -42,12 +52,21 @@ class AgentHTTPServer(ThreadingHTTPServer):
         runtime_factory: Callable[..., Any],
         environment: Mapping[str, str],
     ):
+        self.configured_host = address[0]
         self.db_path = Path(db_path)
         self.runtime_factory = runtime_factory
         self.environment = environment
         self.chat_lock = threading.Lock()
         self.state_lock = threading.RLock()
         super().__init__(address, AgentRequestHandler)
+
+    def allowed_authorities(self) -> set[str]:
+        hosts = {self.configured_host, self.server_address[0]}
+        if hosts & {"127.0.0.1", "localhost", "::1"}:
+            hosts.update({"127.0.0.1", "localhost", "::1"})
+        return set().union(
+            *(_authorities_for(host, self.server_port) for host in hosts if host)
+        )
 
 
 class AgentRequestHandler(BaseHTTPRequestHandler):
@@ -76,12 +95,7 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             self._json(500, {"error": "本地 Agent 服务发生未预期错误"})
 
     def _validate_local_request(self) -> None:
-        port = self.server.server_port
-        local_hosts = {
-            f"127.0.0.1:{port}",
-            f"localhost:{port}",
-            f"[::1]:{port}",
-        }
+        local_hosts = self.server.allowed_authorities()
         host = self.headers.get("Host", "").lower()
         if host not in local_hosts:
             raise RequestProblem(403, "请求必须使用本地 Host")
@@ -108,7 +122,8 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
                 requested = session_ids[0]
             with self.server.state_lock:
                 with self._store() as store:
-                    self._json(200, self._state(store, requested))
+                    state = self._state(store, requested)
+            self._json(200, state)
             return
         static = STATIC_FILES.get(parsed.path)
         if static is None or parsed.query:
@@ -257,9 +272,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Minimal Agent web: {url}")
     try:
         if not args.no_browser:
-            opener = threading.Timer(0.25, webbrowser.open, args=(url,))
-            opener.daemon = True
-            opener.start()
+            try:
+                opener = threading.Timer(0.25, webbrowser.open, args=(url,))
+                opener.daemon = True
+                opener.start()
+            except Exception:
+                print("Warning: browser could not be opened.", file=sys.stderr)
         server.serve_forever()
     except KeyboardInterrupt:
         print()
