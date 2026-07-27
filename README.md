@@ -99,7 +99,7 @@ python -m unittest discover -s tests -v
 
 ## 两个终端验证 session 隔离
 
-打开两个 PowerShell 窗口，并在两个窗口都完成上面的环境变量配置。然后分别运行：
+打开两个 PowerShell 窗口。如果项目根目录的本地 `.env` 已填写非空 Key，可直接运行；否则在两个窗口都完成上面的环境变量配置。然后分别运行：
 
 ```powershell
 # 终端 1
@@ -168,7 +168,7 @@ python -m mini_agent --session weekly-report
 
 ## 真实 API 冒烟测试（会访问网络并产生 API 使用）
 
-默认单元测试不会访问网络。确认 Key 已在当前窗口设置后，再单独运行下列命令；录屏和终端输出中不要展示 Key：
+默认单元测试不会访问网络。确认项目根目录的本地 `.env` 已填写非空 Key，或 Key 已在当前 PowerShell 窗口设置后，再单独运行下列命令；录屏和终端输出中不要展示 Key：
 
 ```powershell
 # 直接回答路径
