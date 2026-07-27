@@ -172,4 +172,8 @@ python -m mini_agent --session live-direct --once "只回答：连接成功"
 python -m mini_agent --session live-tools --once "请务必使用 calculator 工具计算 25 * 18，然后告诉我结果"
 ```
 
-若要录制两个 session 的完整演示，可先执行 `./demo.ps1` 获取逐步提示，再分别按“两个终端验证 session 隔离”的命令操作，最后运行 `python -m unittest discover -v`。
+若要录制两个 session 的完整演示，可先执行下列命令获取逐步提示（只对这个子进程绕过本机 PowerShell 的脚本执行策略，不会修改系统设置），再分别按“两个终端验证 session 隔离”的命令操作，最后运行 `python -m unittest discover -v`：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\demo.ps1
+```
