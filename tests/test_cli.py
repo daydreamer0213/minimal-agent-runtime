@@ -1,4 +1,5 @@
 import io
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -70,13 +71,45 @@ class CLITests(unittest.TestCase):
             model="process-model",
         )
 
+    @patch("mini_agent.cli.AgentRuntime")
+    @patch("mini_agent.cli.DeepSeekClient")
+    def test_last_dotenv_duplicate_wins_without_overwriting_process_environment(
+        self, client_class, _runtime_class
+    ):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / ".env").write_text(
+                "DEEPSEEK_API_KEY=dotenv-key\n"
+                "DEEPSEEK_BASE_URL=https://first.example\n"
+                "IGNORED_SETTING=ignored-value\n"
+                "DEEPSEEK_BASE_URL=https://last.example\n"
+                "DEEPSEEK_MODEL=dotenv-model\n",
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ", {"DEEPSEEK_MODEL": "process-model"}, clear=True
+            ), patch("mini_agent.cli.Path.cwd", return_value=root), patch(
+                "sys.stdout", io.StringIO()
+            ):
+                exit_code = main(
+                    ["--db", str(root / "agent.db"), "--once", "hello"]
+                )
+                self.assertNotIn("IGNORED_SETTING", os.environ)
+
+        self.assertEqual(exit_code, 0)
+        client_class.assert_called_once_with(
+            "dotenv-key",
+            base_url="https://last.example",
+            model="process-model",
+        )
+
     @patch("mini_agent.cli.DeepSeekClient")
     def test_malformed_supported_dotenv_line_is_sanitized(self, client_class):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             secret = "must-not-appear"
             (root / ".env").write_text(
-                f'DEEPSEEK_API_KEY="{secret}\n', encoding="utf-8"
+                f"DEEPSEEK_API_KEY {secret}\n", encoding="utf-8"
             )
             errors = io.StringIO()
             with patch.dict("os.environ", {}, clear=True), patch(

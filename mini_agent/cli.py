@@ -73,6 +73,9 @@ def _load_dotenv() -> None:
     if not path.is_file():
         return
 
+    process_variables = {
+        name for name in _DOTENV_VARIABLES if name in os.environ
+    }
     for raw_line in path.read_text(encoding="utf-8-sig").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
@@ -92,7 +95,8 @@ def _load_dotenv() -> None:
             if len(value) < 2 or value[0] != value[-1]:
                 raise ConfigurationError(f"Invalid .env entry for {name}")
             value = value[1:-1]
-        os.environ.setdefault(name, value)
+        if name not in process_variables:
+            os.environ[name] = value
 
 
 def _build_client(api_key: str) -> DeepSeekClient:
