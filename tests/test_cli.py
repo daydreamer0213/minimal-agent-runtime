@@ -47,6 +47,28 @@ class CLITests(unittest.TestCase):
 
     @patch("mini_agent.cli.AgentRuntime")
     @patch("mini_agent.cli.DeepSeekClient")
+    def test_local_commands_work_without_an_api_key(self, client_class, runtime_class):
+        with tempfile.TemporaryDirectory() as temp:
+            db_path = Path(temp) / "agent.db"
+            store = SessionStore(db_path)
+            store.create_session("existing", "main")
+            store.add_trace("main", 1, "final", {"content": "done"})
+            store.close()
+
+            output = io.StringIO()
+            with patch.dict("os.environ", {}, clear=True), patch("sys.stdout", output), patch(
+                "builtins.input", side_effect=["/sessions", "/trace", "/exit"]
+            ):
+                exit_code = main(["--db", str(db_path), "--session", "main"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("main", output.getvalue())
+        self.assertIn("final", output.getvalue())
+        client_class.assert_not_called()
+        runtime_class.assert_not_called()
+
+    @patch("mini_agent.cli.AgentRuntime")
+    @patch("mini_agent.cli.DeepSeekClient")
     def test_interactive_local_commands_do_not_run_the_agent(
         self, _client_class, runtime_class
     ):

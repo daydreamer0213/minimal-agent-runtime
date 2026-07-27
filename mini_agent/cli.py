@@ -27,14 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--session", help="Reuse or create this session ID")
     parser.add_argument("--once", help="Run one prompt and exit")
     args = parser.parse_args(argv)
-
     api_key = os.environ.get("DEEPSEEK_API_KEY")
-    if not api_key:
-        print(
-            "DEEPSEEK_API_KEY is required. Set it before starting the agent.",
-            file=sys.stderr,
-        )
-        return 2
 
     store: SessionStore | None = None
     try:
@@ -42,13 +35,16 @@ def main(argv: list[str] | None = None) -> int:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         store = SessionStore(db_path)
         session_id = _select_session(store, args.session)
-        runtime = AgentRuntime(store, _build_client(api_key), build_default_registry())
 
         if args.once is not None:
+            if not api_key:
+                _print_missing_api_key()
+                return 2
+            runtime = _build_runtime(store, api_key)
             return _run_prompt(runtime, session_id, args.once, api_key)
 
         print(f"Current session: {session_id}")
-        return _interactive_loop(store, runtime, session_id, api_key)
+        return _interactive_loop(store, session_id, api_key)
     except (AgentError, LLMError) as error:
         print(f"Error: {_safe_text(str(error), api_key)}", file=sys.stderr)
         return 1
@@ -69,6 +65,17 @@ def _build_client(api_key: str) -> DeepSeekClient:
     return DeepSeekClient(api_key, **options)
 
 
+def _build_runtime(store: SessionStore, api_key: str) -> AgentRuntime:
+    return AgentRuntime(store, _build_client(api_key), build_default_registry())
+
+
+def _print_missing_api_key() -> None:
+    print(
+        "DEEPSEEK_API_KEY is required. Set it before starting the agent.",
+        file=sys.stderr,
+    )
+
+
 def _select_session(store: SessionStore, requested_id: str | None) -> str:
     if requested_id is None:
         return store.create_session()
@@ -86,9 +93,8 @@ def _run_prompt(runtime: AgentRuntime, session_id: str, prompt: str, api_key: st
     return 0
 
 
-def _interactive_loop(
-    store: SessionStore, runtime: AgentRuntime, session_id: str, api_key: str
-) -> int:
+def _interactive_loop(store: SessionStore, session_id: str, api_key: str | None) -> int:
+    runtime: AgentRuntime | None = None
     while True:
         try:
             command = input("you> ").strip()
@@ -98,16 +104,19 @@ def _interactive_loop(
         if not command:
             continue
         if command.startswith("/"):
-            should_exit, session_id = _handle_command(store, command, session_id, api_key)
+            should_exit, session_id = _handle_command(store, command, session_id)
             if should_exit:
                 return 0
             continue
+        if not api_key:
+            _print_missing_api_key()
+            continue
+        if runtime is None:
+            runtime = _build_runtime(store, api_key)
         _run_prompt(runtime, session_id, command, api_key)
 
 
-def _handle_command(
-    store: SessionStore, command: str, session_id: str, api_key: str
-) -> tuple[bool, str]:
+def _handle_command(store: SessionStore, command: str, session_id: str) -> tuple[bool, str]:
     name, _, argument = command.partition(" ")
     argument = argument.strip()
     if name == "/new":
@@ -157,5 +166,5 @@ def _truncate(text: str, limit: int = 240) -> str:
     return text if len(text) <= limit else f"{text[:limit - 3]}..."
 
 
-def _safe_text(message: str, api_key: str) -> str:
-    return message.replace(api_key, "[redacted]")
+def _safe_text(message: str, api_key: str | None) -> str:
+    return message.replace(api_key, "[redacted]") if api_key else message
