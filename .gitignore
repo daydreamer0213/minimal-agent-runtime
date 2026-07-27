@@ -1,2 +1,6 @@
 .worktrees/
 .superpowers/
+__pycache__/
+*.py[cod]
+.agent-data/
+.env

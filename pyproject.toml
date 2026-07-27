@@ -1,0 +1,6 @@
+[project]
+name = "minimal-agent"
+version = "0.1.0"
+description = "A minimal Agent runtime built without Agent frameworks"
+requires-python = ">=3.11"
+dependencies = []
