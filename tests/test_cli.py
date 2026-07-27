@@ -12,6 +12,32 @@ from mini_agent.store import SessionStore
 class CLITests(unittest.TestCase):
     @patch("mini_agent.cli.AgentRuntime")
     @patch("mini_agent.cli.DeepSeekClient")
+    def test_once_mode_replaces_unencodable_output_on_gbk_console(
+        self, _client_class, runtime_class
+    ):
+        runtime_class.return_value.run.return_value = "任务完成 ✅"
+        raw_output = io.BytesIO()
+        console = io.TextIOWrapper(
+            raw_output, encoding="gbk", errors="strict", write_through=True
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with patch.dict(
+                "os.environ", {"DEEPSEEK_API_KEY": "test-key"}, clear=True
+            ), patch("mini_agent.cli.Path.cwd", return_value=root), patch(
+                "sys.stdout", console
+            ):
+                exit_code = main(
+                    ["--db", str(root / "agent.db"), "--once", "hello"]
+                )
+
+        output = raw_output.getvalue().decode("gbk")
+        self.assertEqual(exit_code, 0)
+        self.assertIn("任务完成", output)
+        self.assertIn("?", output)
+
+    @patch("mini_agent.cli.AgentRuntime")
+    @patch("mini_agent.cli.DeepSeekClient")
     def test_once_mode_loads_deepseek_settings_from_dotenv(
         self, client_class, runtime_class
     ):

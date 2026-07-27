@@ -32,6 +32,7 @@ class ConfigurationError(ValueError):
 
 
 def main(argv: list[str] | None = None) -> int:
+    _configure_console_streams()
     parser = argparse.ArgumentParser(description="A minimal DeepSeek agent")
     parser.add_argument("--db", default=".agent-data/agent.db", help="SQLite database path")
     parser.add_argument("--session", help="Reuse or create this session ID")
@@ -66,6 +67,13 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if store is not None:
             store.close()
+
+
+def _configure_console_streams() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(errors="replace")
 
 
 def _load_dotenv() -> None:
