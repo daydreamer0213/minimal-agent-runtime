@@ -9,8 +9,10 @@ from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from mini_agent.llm import LLMError
+from mini_agent.llm import LLMError, LLMResponse, ToolCall
+from mini_agent.runtime import AgentRuntime
 from mini_agent.store import SessionStore
+from mini_agent.tools import build_default_registry
 from mini_agent.web import AgentRequestHandler, create_server, main
 
 
@@ -30,16 +32,38 @@ class TrackingLock:
         self.depth -= 1
 
 
+class QueueLLM:
+    def __init__(self, responses):
+        self.responses = list(responses)
+
+    def chat(self, messages, tools):
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
 class WebTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.db_path = Path(self.temp.name) / "agent.db"
-        self.runtime_factory = Mock()
+        self.responses = []
+        self.runtime_calls = 0
+
+        def runtime_factory(store, _api_key):
+            self.runtime_calls += 1
+            return AgentRuntime(
+                store,
+                QueueLLM(self.responses),
+                build_default_registry(),
+            )
+
+        self.runtime_factory = runtime_factory
         self.server = create_server(
             ("127.0.0.1", 0),
             self.db_path,
             runtime_factory=self.runtime_factory,
-            environment={},
+            environment={"DEEPSEEK_API_KEY": "test-key"},
         )
         self.thread = threading.Thread(
             target=self.server.serve_forever,
@@ -119,7 +143,125 @@ class WebTests(unittest.TestCase):
             state["current_session_id"],
             state["sessions"][0]["id"],
         )
-        self.runtime_factory.assert_not_called()
+        self.assertEqual(self.runtime_calls, 0)
+
+    def test_chat_runs_real_runtime_tools_and_returns_refreshed_state(self):
+        _, created, _ = self.request(
+            "/api/sessions",
+            method="POST",
+            payload={"title": "天气"},
+        )
+        session_id = json.loads(created)["session_id"]
+        self.responses.extend(
+            [
+                LLMResponse(
+                    "",
+                    "先查天气",
+                    [
+                        ToolCall(
+                            "weather-call",
+                            "weather",
+                            '{"city":"杭州","date":"2026-07-28"}',
+                        )
+                    ],
+                ),
+                LLMResponse(
+                    "",
+                    "添加待办",
+                    [
+                        ToolCall(
+                            "todo-call",
+                            "todo",
+                            '{"action":"add","text":"带雨伞"}',
+                        )
+                    ],
+                ),
+                LLMResponse("已查询模拟天气并添加待办。", "完成", []),
+            ]
+        )
+
+        status, body, _ = self.request(
+            "/api/chat",
+            method="POST",
+            payload={
+                "session_id": session_id,
+                "message": "查天气并记待办",
+            },
+        )
+        payload = json.loads(body)
+
+        self.assertEqual(status, 200)
+        self.assertIn("已查询", payload["answer"])
+        self.assertEqual(payload["state"]["todos"][0]["text"], "带雨伞")
+        events = [trace["event"] for trace in payload["state"]["traces"]]
+        self.assertIn("tool", events)
+        self.assertEqual(payload["state"]["current_session_id"], session_id)
+
+    def test_chat_rejects_bad_inputs_without_running_runtime(self):
+        with self.assertRaises(HTTPError) as empty:
+            self.request(
+                "/api/chat",
+                method="POST",
+                payload={"session_id": "missing", "message": ""},
+            )
+        self.assertEqual(empty.exception.code, 400)
+        self.assertEqual(self.runtime_calls, 0)
+
+        oversized = Request(
+            self.base_url + "/api/chat",
+            data=b"x" * (32 * 1024 + 1),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with self.assertRaises(HTTPError) as too_large:
+            urlopen(oversized, timeout=2)
+        self.assertEqual(too_large.exception.code, 413)
+
+    def test_missing_key_and_runtime_errors_are_sanitized(self):
+        self.server.environment = {}
+        with self.assertRaises(HTTPError) as missing:
+            self.request(
+                "/api/chat",
+                method="POST",
+                payload={"session_id": "missing", "message": "你好"},
+            )
+        self.assertEqual(missing.exception.code, 503)
+
+        self.server.environment = {"DEEPSEEK_API_KEY": "secret-key"}
+        self.responses.append(RuntimeError("secret-key must not escape"))
+        _, state_body, _ = self.request("/api/state")
+        session_id = json.loads(state_body)["current_session_id"]
+        with self.assertRaises(HTTPError) as failed:
+            self.request(
+                "/api/chat",
+                method="POST",
+                payload={"session_id": session_id, "message": "触发错误"},
+            )
+        error_body = failed.exception.read().decode("utf-8")
+        self.assertEqual(failed.exception.code, 502)
+        self.assertNotIn("secret-key", error_body)
+        self.assertNotIn("Traceback", error_body)
+
+    def test_state_redacts_the_key_from_nested_trace_data(self):
+        _, body, _ = self.request("/api/state")
+        session_id = json.loads(body)["current_session_id"]
+        store = SessionStore(self.db_path)
+        try:
+            store.add_trace(
+                session_id,
+                1,
+                "tool",
+                {"result": {"message": "test-key must not reach browser"}},
+            )
+        finally:
+            store.close()
+
+        _, state_body, _ = self.request(
+            f"/api/state?session_id={session_id}"
+        )
+
+        self.assertNotIn("test-key", state_body.decode("utf-8"))
+        self.assertIn("[redacted]", state_body.decode("utf-8"))
 
     def test_state_rejects_unknown_session(self):
         with self.assertRaises(HTTPError) as unknown:

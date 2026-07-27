@@ -102,7 +102,7 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
                 f"Web error: {type(error).__name__}",
                 file=sys.stderr,
             )
-            self._json(500, {"error": "本地 Agent 服务发生未预期错误"})
+            self._json(500, {"error": "本地 Agent 服务发生意外错误"})
 
     def _validate_local_request(self) -> None:
         local_host = self.connection.getsockname()[0]
@@ -149,8 +149,15 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
 
     def _post(self) -> None:
         path = urlsplit(self.path).path
-        if path != "/api/sessions":
-            raise RequestProblem(404, "API 不存在")
+        if path == "/api/sessions":
+            self._create_session()
+            return
+        if path == "/api/chat":
+            self._chat()
+            return
+        raise RequestProblem(404, "API 不存在")
+
+    def _create_session(self) -> None:
         content_type = self.headers.get("Content-Type", "")
         if content_type.split(";", 1)[0].strip().lower() != "application/json":
             raise RequestProblem(415, "Content-Type 必须是 application/json")
@@ -165,6 +172,34 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             session_id = store.create_session(title=title)
             state = self._state(store, session_id)
         self._json(201, {"session_id": session_id, "state": state})
+
+    def _chat(self) -> None:
+        content_type = self.headers.get("Content-Type", "")
+        if content_type.split(";", 1)[0].strip().lower() != "application/json":
+            raise RequestProblem(415, "Content-Type 必须是 application/json")
+        payload = self._read_json()
+        session_id = payload.get("session_id")
+        message = payload.get("message")
+        if not isinstance(session_id, str) or not session_id:
+            raise RequestProblem(400, "session_id 必须是非空字符串")
+        if not isinstance(message, str) or not message.strip():
+            raise RequestProblem(400, "message 必须是非空字符串")
+
+        api_key = self.server.environment.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise RequestProblem(
+                503,
+                "缺少 DEEPSEEK_API_KEY，请在项目根目录的 .env 中配置",
+            )
+
+        with self.server.chat_lock:
+            with self._store() as store:
+                if not store.session_exists(session_id):
+                    raise RequestProblem(404, "session 不存在")
+                runtime = self.server.runtime_factory(store, api_key)
+                answer = runtime.run(session_id, message.strip())
+                state = self._state(store, session_id)
+        self._json(200, {"answer": answer, "state": state})
 
     def _read_json(self) -> dict[str, Any]:
         raw_length = self.headers.get("Content-Length", "0")
@@ -183,6 +218,19 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             raise RequestProblem(400, "请求正文必须是 JSON 对象")
         return payload
+
+    def _safe_value(self, value: Any) -> Any:
+        key = self.server.environment.get("DEEPSEEK_API_KEY")
+        if isinstance(value, str):
+            return safe_text(value, key)[:2000]
+        if isinstance(value, list):
+            return [self._safe_value(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                str(name): self._safe_value(item)
+                for name, item in value.items()
+            }
+        return value
 
     def _state(
         self,
@@ -212,12 +260,19 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             and message["content"]
             and not message.get("tool_calls")
         ]
+        traces = [
+            {
+                **trace,
+                "data": self._safe_value(trace["data"]),
+            }
+            for trace in reversed(store.list_traces(current_id, limit=40))
+        ]
         return {
             "current_session_id": current_id,
             "sessions": sessions,
             "messages": messages,
             "todos": store.list_todos(current_id),
-            "traces": list(reversed(store.list_traces(current_id, limit=40))),
+            "traces": traces,
         }
 
     def _store(self):
