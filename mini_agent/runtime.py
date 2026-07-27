@@ -93,24 +93,37 @@ class AgentRuntime:
                 for call in response.tool_calls:
                     tool_started = time.perf_counter()
                     try:
-                        arguments = json.loads(call.arguments)
-                    except json.JSONDecodeError as error:
-                        result = {
-                            "ok": False,
-                            "error": f"工具参数不是合法 JSON: {error.msg}",
-                        }
-                    else:
-                        result = self.registry.execute(
-                            call.name,
-                            arguments,
-                            session_id,
-                            self.store,
+                        try:
+                            arguments = json.loads(call.arguments)
+                        except json.JSONDecodeError as error:
+                            result = {
+                                "ok": False,
+                                "error": f"工具参数不是合法 JSON: {error.msg}",
+                            }
+                        else:
+                            result = self.registry.execute(
+                                call.name,
+                                arguments,
+                                session_id,
+                                self.store,
+                            )
+                        result_json = json.dumps(
+                            result,
+                            ensure_ascii=False,
+                            sort_keys=True,
                         )
-                    result_json = json.dumps(
-                        result,
-                        ensure_ascii=False,
-                        sort_keys=True,
-                    )
+                    except Exception as error:
+                        self._trace_error(
+                            session_id,
+                            step,
+                            "runtime_error",
+                            error,
+                            tool_started,
+                            stage="tool",
+                        )
+                        raise AgentError(
+                            f"工具执行失败: {type(error).__name__}"
+                        ) from None
                     self.store.add_message(
                         session_id,
                         turn_id,

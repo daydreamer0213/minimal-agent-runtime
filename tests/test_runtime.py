@@ -95,6 +95,85 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(assistant["reasoning_content"], "先查天气")
         self.assertTrue(any(message["role"] == "tool" for message in second_messages))
 
+    def test_multiple_tool_calls_are_saved_and_executed_in_order(self):
+        runtime, _ = self.runtime([
+            LLMResponse("", "依次计算", [
+                ToolCall("first", "calculator", '{"expression":"1+1"}'),
+                ToolCall("second", "calculator", '{"expression":"2+2"}'),
+            ]),
+            LLMResponse("结果是 2 和 4。", "汇总结果", []),
+        ])
+
+        runtime.run(self.session, "计算两个表达式")
+
+        messages = self.store.context_messages(self.session)
+        tool_assistant_index = next(
+            index for index, message in enumerate(messages)
+            if message.get("tool_calls")
+        )
+        tool_message_indexes = [
+            index for index, message in enumerate(messages)
+            if message["role"] == "tool"
+        ]
+        self.assertEqual(
+            [messages[index]["tool_call_id"] for index in tool_message_indexes],
+            ["first", "second"],
+        )
+        self.assertTrue(all(
+            tool_assistant_index < index for index in tool_message_indexes
+        ))
+        self.assertEqual(
+            [messages[index]["content"] for index in tool_message_indexes],
+            ['{"ok": true, "result": 2}', '{"ok": true, "result": 4}'],
+        )
+
+    def test_unexpected_tool_execution_error_is_sanitized_and_traced(self):
+        secret = "tool-secret-must-not-escape"
+        runtime, _ = self.runtime([
+            LLMResponse("", "调用工具", [
+                ToolCall("broken", "calculator", '{"expression":"1+1"}')
+            ]),
+        ])
+
+        def fail_execute(*_):
+            raise RuntimeError(secret)
+
+        runtime.registry.execute = fail_execute
+
+        with self.assertRaises(AgentError) as raised:
+            runtime.run(self.session, "触发工具错误")
+
+        self.assertNotIn(secret, str(raised.exception))
+        trace = self.store.list_traces(self.session)[0]
+        self.assertEqual(trace["event"], "runtime_error")
+        self.assertEqual(
+            trace["data"],
+            {"error_type": "RuntimeError", "stage": "tool"},
+        )
+        self.assertNotIn(secret, str(trace))
+
+    def test_unserializable_tool_result_error_is_sanitized_and_traced(self):
+        runtime, _ = self.runtime([
+            LLMResponse("", "调用工具", [
+                ToolCall("broken", "calculator", '{"expression":"1+1"}')
+            ]),
+        ])
+        runtime.registry.execute = lambda *_: {
+            "ok": True,
+            "result": object(),
+        }
+
+        with self.assertRaises(AgentError) as raised:
+            runtime.run(self.session, "触发序列化错误")
+
+        self.assertEqual(str(raised.exception), "工具执行失败: TypeError")
+        trace = self.store.list_traces(self.session)[0]
+        self.assertEqual(trace["event"], "runtime_error")
+        self.assertEqual(
+            trace["data"],
+            {"error_type": "TypeError", "stage": "tool"},
+        )
+
     def test_bad_tool_arguments_are_returned_to_model(self):
         runtime, fake = self.runtime([
             LLMResponse("", "参数写错了", [
