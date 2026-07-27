@@ -29,17 +29,23 @@ python --version
 
 后文仍以通用的 `python` 写法为主，便于复制到其他电脑。
 
-## 2. 在当前 PowerShell 临时配置 DeepSeek
+## 2. 配置 DeepSeek
 
-这些变量只对当前 PowerShell 窗口有效；关闭窗口后需要重新设置。将第一行的占位文本替换为自己的 Key，**不要**把真实 Key 写入代码、截图、提交或聊天记录。
+最简单的方式是复制模板，在项目根目录创建本机专用配置：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+然后只在 `.env` 中填写自己的 `DEEPSEEK_API_KEY`。CLI 在第一次需要调用模型时会自动读取项目根目录中的 `.env`；这个文件已被 Git 忽略，不要把真实 Key 复制到源码、截图、提交或聊天记录。支持的变量只有 `DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL` 和 `DEEPSEEK_MODEL`。如果当前 PowerShell 已设置同名环境变量，它会优先于 `.env`。
+
+也可以只在当前 PowerShell 临时配置 DeepSeek。以下变量只对当前窗口有效；关闭窗口后需要重新设置：
 
 ```powershell
 $env:DEEPSEEK_API_KEY = "替换为你的 Key"
 $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 $env:DEEPSEEK_MODEL = "deepseek-v4-pro"
 ```
-
-也可以将变量名与非秘密示例复制自 [.env.example](.env.example)，但本程序只从 PowerShell 环境变量读取 Key，并不会自动读取 `.env` 文件。
 
 ## 3. 启动、指定会话、单次调用和测试
 

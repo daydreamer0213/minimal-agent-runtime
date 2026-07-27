@@ -20,6 +20,16 @@ _HELP = """Commands:
   /help              Show this help.
   /exit              Exit the program."""
 
+_DOTENV_VARIABLES = {
+    "DEEPSEEK_API_KEY",
+    "DEEPSEEK_BASE_URL",
+    "DEEPSEEK_MODEL",
+}
+
+
+class ConfigurationError(ValueError):
+    """A safe-to-display local configuration error."""
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="A minimal DeepSeek agent")
@@ -27,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--session", help="Reuse or create this session ID")
     parser.add_argument("--once", help="Run one prompt and exit")
     args = parser.parse_args(argv)
-    api_key = os.environ.get("DEEPSEEK_API_KEY")
+    api_key: str | None = None
 
     store: SessionStore | None = None
     try:
@@ -37,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
         session_id = _select_session(store, args.session)
 
         if args.once is not None:
+            _load_dotenv()
+            api_key = os.environ.get("DEEPSEEK_API_KEY")
             if not api_key:
                 _print_missing_api_key()
                 return 2
@@ -44,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
             return _run_prompt(runtime, session_id, args.once, api_key)
 
         print(f"Current session: {session_id}")
-        return _interactive_loop(store, session_id, api_key)
+        return _interactive_loop(store, session_id)
     except (AgentError, LLMError) as error:
         print(f"Error: {_safe_text(str(error), api_key)}", file=sys.stderr)
         return 1
@@ -54,6 +66,33 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if store is not None:
             store.close()
+
+
+def _load_dotenv() -> None:
+    path = Path.cwd() / ".env"
+    if not path.is_file():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8-sig").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            name = line.split(maxsplit=1)[0]
+            if name in _DOTENV_VARIABLES:
+                raise ConfigurationError(f"Invalid .env entry for {name}")
+            continue
+
+        name, value = line.split("=", 1)
+        name = name.strip()
+        if name not in _DOTENV_VARIABLES:
+            continue
+        value = value.strip()
+        if value[:1] in {"'", '"'} or value[-1:] in {"'", '"'}:
+            if len(value) < 2 or value[0] != value[-1]:
+                raise ConfigurationError(f"Invalid .env entry for {name}")
+            value = value[1:-1]
+        os.environ.setdefault(name, value)
 
 
 def _build_client(api_key: str) -> DeepSeekClient:
@@ -93,8 +132,9 @@ def _run_prompt(runtime: AgentRuntime, session_id: str, prompt: str, api_key: st
     return 0
 
 
-def _interactive_loop(store: SessionStore, session_id: str, api_key: str | None) -> int:
+def _interactive_loop(store: SessionStore, session_id: str) -> int:
     runtime: AgentRuntime | None = None
+    api_key: str | None = None
     while True:
         try:
             command = input("you> ").strip()
@@ -108,6 +148,9 @@ def _interactive_loop(store: SessionStore, session_id: str, api_key: str | None)
             if should_exit:
                 return 0
             continue
+        if runtime is None:
+            _load_dotenv()
+            api_key = os.environ.get("DEEPSEEK_API_KEY")
         if not api_key:
             _print_missing_api_key()
             continue

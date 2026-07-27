@@ -11,18 +11,103 @@ from mini_agent.store import SessionStore
 class CLITests(unittest.TestCase):
     @patch("mini_agent.cli.AgentRuntime")
     @patch("mini_agent.cli.DeepSeekClient")
+    def test_once_mode_loads_deepseek_settings_from_dotenv(
+        self, client_class, runtime_class
+    ):
+        runtime_class.return_value.run.return_value = "loaded"
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / ".env").write_text(
+                "\ufeff# local settings\n"
+                " DEEPSEEK_API_KEY = 'dotenv-key' \n"
+                'DEEPSEEK_BASE_URL = "https://dotenv.example/api"\n'
+                "DEEPSEEK_MODEL=dotenv-model\n",
+                encoding="utf-8",
+            )
+            with patch.dict("os.environ", {}, clear=True), patch(
+                "mini_agent.cli.Path.cwd", return_value=root
+            ), patch("sys.stdout", io.StringIO()):
+                exit_code = main(
+                    ["--db", str(root / "agent.db"), "--once", "hello"]
+                )
+
+        self.assertEqual(exit_code, 0)
+        client_class.assert_called_once_with(
+            "dotenv-key",
+            base_url="https://dotenv.example/api",
+            model="dotenv-model",
+        )
+
+    @patch("mini_agent.cli.AgentRuntime")
+    @patch("mini_agent.cli.DeepSeekClient")
+    def test_process_environment_overrides_dotenv(
+        self, client_class, _runtime_class
+    ):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / ".env").write_text(
+                "DEEPSEEK_API_KEY=dotenv-key\n"
+                "DEEPSEEK_BASE_URL=https://dotenv.example\n"
+                "DEEPSEEK_MODEL=dotenv-model\n",
+                encoding="utf-8",
+            )
+            environment = {
+                "DEEPSEEK_API_KEY": "process-key",
+                "DEEPSEEK_BASE_URL": "https://process.example",
+                "DEEPSEEK_MODEL": "process-model",
+            }
+            with patch.dict("os.environ", environment, clear=True), patch(
+                "mini_agent.cli.Path.cwd", return_value=root
+            ), patch("sys.stdout", io.StringIO()):
+                exit_code = main(
+                    ["--db", str(root / "agent.db"), "--once", "hello"]
+                )
+
+        self.assertEqual(exit_code, 0)
+        client_class.assert_called_once_with(
+            "process-key",
+            base_url="https://process.example",
+            model="process-model",
+        )
+
+    @patch("mini_agent.cli.DeepSeekClient")
+    def test_malformed_supported_dotenv_line_is_sanitized(self, client_class):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            secret = "must-not-appear"
+            (root / ".env").write_text(
+                f'DEEPSEEK_API_KEY="{secret}\n', encoding="utf-8"
+            )
+            errors = io.StringIO()
+            with patch.dict("os.environ", {}, clear=True), patch(
+                "mini_agent.cli.Path.cwd", return_value=root
+            ), patch("sys.stderr", errors):
+                exit_code = main(
+                    ["--db", str(root / "agent.db"), "--once", "hello"]
+                )
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("DEEPSEEK_API_KEY", errors.getvalue())
+        self.assertNotIn(secret, errors.getvalue())
+        client_class.assert_not_called()
+
+    @patch("mini_agent.cli.AgentRuntime")
+    @patch("mini_agent.cli.DeepSeekClient")
     def test_once_mode_creates_named_session_and_prints_answer(
         self, client_class, runtime_class
     ):
         runtime_class.return_value.run.return_value = "答案是 4"
-        with patch.dict("os.environ", {"DEEPSEEK_API_KEY": "test-key"}, clear=True):
-            with tempfile.TemporaryDirectory() as temp:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with patch.dict(
+                "os.environ", {"DEEPSEEK_API_KEY": "test-key"}, clear=True
+            ), patch("mini_agent.cli.Path.cwd", return_value=root):
                 output = io.StringIO()
                 with patch("sys.stdout", output):
                     exit_code = main(
                         [
                             "--db",
-                            str(Path(temp) / "agent.db"),
+                            str(root / "agent.db"),
                             "--session",
                             "demo",
                             "--once",
@@ -37,10 +122,15 @@ class CLITests(unittest.TestCase):
 
     def test_missing_api_key_has_clear_message(self):
         with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
             output = io.StringIO()
-            with patch.dict("os.environ", {}, clear=True):
+            with patch.dict("os.environ", {}, clear=True), patch(
+                "mini_agent.cli.Path.cwd", return_value=root
+            ):
                 with patch("sys.stderr", output):
-                    exit_code = main(["--db", str(Path(temp) / "agent.db"), "--once", "你好"])
+                    exit_code = main(
+                        ["--db", str(root / "agent.db"), "--once", "你好"]
+                    )
 
         self.assertEqual(exit_code, 2)
         self.assertIn("DEEPSEEK_API_KEY", output.getvalue())

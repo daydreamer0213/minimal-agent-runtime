@@ -5,6 +5,20 @@ import unittest
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_dotenv_template_and_automatic_loading_are_documented(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        example = Path(".env.example").read_text(encoding="utf-8")
+
+        self.assertIn("自动读取项目根目录中的 `.env`", readme)
+        self.assertEqual(
+            example.splitlines(),
+            [
+                "DEEPSEEK_API_KEY=",
+                "DEEPSEEK_BASE_URL=https://api.deepseek.com",
+                "DEEPSEEK_MODEL=deepseek-v4-pro",
+            ],
+        )
+
     def test_required_submission_documents_exist_and_cover_memory(self):
         required = [
             "README.md",
