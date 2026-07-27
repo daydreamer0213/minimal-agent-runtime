@@ -117,7 +117,22 @@ class WebTests(unittest.TestCase):
         status, body, headers = self.request("/")
         self.assertEqual(status, 200)
         self.assertIn(b'data-app="minimal-agent"', body)
+        for marker in [
+            b'id="session-list"',
+            b'id="chat-list"',
+            b'id="trace-list"',
+            b'id="todo-list"',
+            b'id="status-message"',
+            b'id="quick-prompts"',
+        ]:
+            self.assertIn(marker, body)
         self.assertIn("text/html", headers["Content-Type"])
+
+        _, script, _ = self.request("/app.js")
+        self.assertIn(b"fetch(path", script)
+        self.assertIn(b"/api/state", script)
+        self.assertIn(b"textContent", script)
+        self.assertNotIn(b"innerHTML", script)
 
         status, body, headers = self.request("/app.css")
         self.assertEqual(status, 200)

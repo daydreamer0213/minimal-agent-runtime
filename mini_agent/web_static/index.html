@@ -7,7 +7,80 @@
     <link rel="stylesheet" href="/app.css">
   </head>
   <body>
-    <main id="app">Minimal Agent 实验台</main>
+    <div class="shell" aria-label="Agent 实验台">
+      <aside class="sessions-panel" aria-labelledby="sessions-title">
+        <header class="panel-head">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true">A</span>
+            <div>
+              <p class="eyebrow">Runtime / Local</p>
+              <h1>Minimal Agent</h1>
+            </div>
+          </div>
+          <div class="panel-heading">
+            <h2 id="sessions-title">Sessions</h2>
+            <span class="badge" aria-label="运行模式">SQLite</span>
+          </div>
+        </header>
+        <form id="new-session-form" class="new-session-form">
+          <label for="new-session-title">新建会话标题</label>
+          <div class="inline-form">
+            <input id="new-session-title" maxlength="80" autocomplete="off" placeholder="例如：天气查询">
+            <button type="submit">创建</button>
+          </div>
+        </form>
+        <nav id="session-list" class="session-list" aria-label="会话列表"></nav>
+        <p class="local-note">本地运行，界面不读取或展示 API Key。</p>
+      </aside>
+
+      <main class="chat-panel">
+        <header class="chat-header">
+          <div>
+            <p class="eyebrow">Active session</p>
+            <h2 id="current-session" tabindex="-1">未选择会话</h2>
+          </div>
+          <p class="runtime-state" aria-live="polite"><span></span> Agent loop: ready</p>
+        </header>
+
+        <section id="quick-prompts" class="quick-prompts" aria-label="快捷提示">
+          <button type="button" data-prompt="明天深圳天气如何？">查询天气</button>
+          <button type="button" data-prompt="请总结今天的工作要点。">总结内容</button>
+          <button type="button" data-prompt="帮我拆解这条任务，并给出下一步。">任务拆解</button>
+        </section>
+
+        <section id="chat-list" class="chat-list" aria-label="对话记录"></section>
+
+        <p id="status-message" class="status-message" role="status" aria-live="polite" aria-atomic="true"></p>
+
+        <form id="chat-form" class="chat-form">
+          <label for="chat-input">给 Agent 发消息</label>
+          <div class="composer">
+            <textarea id="chat-input" rows="3" required placeholder="输入指令后自动调用工具，支持中文输入"></textarea>
+            <button id="send-button" type="submit">发送</button>
+          </div>
+        </form>
+      </main>
+
+      <aside class="inspector-panel" aria-label="Agent 执行面板">
+        <section class="inspector-section trace-section">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Live loop</p>
+              <h2>Agent Trace</h2>
+            </div>
+            <span class="badge">思考 → 工具 → 观察 → 回答</span>
+          </div>
+          <div id="trace-list" class="trace-list" aria-live="polite" aria-label="执行轨迹"></div>
+        </section>
+        <section class="inspector-section">
+          <div class="panel-heading">
+            <h2>当前待办</h2>
+            <span class="badge">Session only</span>
+          </div>
+          <ul id="todo-list" class="todo-list" aria-label="待办列表"></ul>
+        </section>
+      </aside>
+    </div>
     <script src="/app.js" defer></script>
   </body>
 </html>
