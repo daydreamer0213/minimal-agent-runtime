@@ -10,8 +10,8 @@ from mini_agent.store import SessionStore
 
 
 class CLITests(unittest.TestCase):
-    @patch("mini_agent.cli.AgentRuntime")
-    @patch("mini_agent.cli.DeepSeekClient")
+    @patch("mini_agent.config.AgentRuntime")
+    @patch("mini_agent.config.DeepSeekClient")
     def test_once_mode_replaces_unencodable_output_on_gbk_console(
         self, _client_class, runtime_class
     ):
@@ -36,8 +36,8 @@ class CLITests(unittest.TestCase):
         self.assertIn("任务完成", output)
         self.assertIn("?", output)
 
-    @patch("mini_agent.cli.AgentRuntime")
-    @patch("mini_agent.cli.DeepSeekClient")
+    @patch("mini_agent.config.AgentRuntime")
+    @patch("mini_agent.config.DeepSeekClient")
     def test_once_mode_loads_deepseek_settings_from_dotenv(
         self, client_class, runtime_class
     ):
@@ -65,8 +65,8 @@ class CLITests(unittest.TestCase):
             model="dotenv-model",
         )
 
-    @patch("mini_agent.cli.AgentRuntime")
-    @patch("mini_agent.cli.DeepSeekClient")
+    @patch("mini_agent.config.AgentRuntime")
+    @patch("mini_agent.config.DeepSeekClient")
     def test_process_environment_overrides_dotenv(
         self, client_class, _runtime_class
     ):
@@ -97,8 +97,8 @@ class CLITests(unittest.TestCase):
             model="process-model",
         )
 
-    @patch("mini_agent.cli.AgentRuntime")
-    @patch("mini_agent.cli.DeepSeekClient")
+    @patch("mini_agent.config.AgentRuntime")
+    @patch("mini_agent.config.DeepSeekClient")
     def test_last_dotenv_duplicate_wins_without_overwriting_process_environment(
         self, client_class, _runtime_class
     ):
@@ -129,7 +129,7 @@ class CLITests(unittest.TestCase):
             model="process-model",
         )
 
-    @patch("mini_agent.cli.DeepSeekClient")
+    @patch("mini_agent.config.DeepSeekClient")
     def test_malformed_supported_dotenv_line_is_sanitized(self, client_class):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -150,8 +150,8 @@ class CLITests(unittest.TestCase):
         self.assertNotIn(secret, errors.getvalue())
         client_class.assert_not_called()
 
-    @patch("mini_agent.cli.AgentRuntime")
-    @patch("mini_agent.cli.DeepSeekClient")
+    @patch("mini_agent.config.AgentRuntime")
+    @patch("mini_agent.config.DeepSeekClient")
     def test_once_mode_creates_named_session_and_prints_answer(
         self, client_class, runtime_class
     ):
@@ -194,8 +194,8 @@ class CLITests(unittest.TestCase):
         self.assertEqual(exit_code, 2)
         self.assertIn("DEEPSEEK_API_KEY", output.getvalue())
 
-    @patch("mini_agent.cli.AgentRuntime")
-    @patch("mini_agent.cli.DeepSeekClient")
+    @patch("mini_agent.config.AgentRuntime")
+    @patch("mini_agent.config.DeepSeekClient")
     def test_local_commands_work_without_an_api_key(self, client_class, runtime_class):
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "agent.db"
@@ -216,8 +216,8 @@ class CLITests(unittest.TestCase):
         client_class.assert_not_called()
         runtime_class.assert_not_called()
 
-    @patch("mini_agent.cli.AgentRuntime")
-    @patch("mini_agent.cli.DeepSeekClient")
+    @patch("mini_agent.config.AgentRuntime")
+    @patch("mini_agent.config.DeepSeekClient")
     def test_interactive_local_commands_do_not_run_the_agent(
         self, _client_class, runtime_class
     ):
@@ -242,8 +242,8 @@ class CLITests(unittest.TestCase):
             self.assertIn("/trace", output.getvalue())
             runtime_class.return_value.run.assert_not_called()
 
-    @patch("mini_agent.cli.AgentRuntime")
-    @patch("mini_agent.cli.DeepSeekClient")
+    @patch("mini_agent.config.AgentRuntime")
+    @patch("mini_agent.config.DeepSeekClient")
     def test_environment_overrides_configure_client(self, client_class, _runtime_class):
         with tempfile.TemporaryDirectory() as temp:
             with patch.dict(
