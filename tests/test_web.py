@@ -195,6 +195,37 @@ class WebTests(unittest.TestCase):
 
         self.assertEqual(status, 200)
 
+    def test_wildcard_binding_accepts_connected_target_authority_only(self):
+        server = create_server(
+            ("0.0.0.0", 0),
+            Path(self.temp.name) / "wildcard.db",
+            environment={},
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            _, port = server.server_address[:2]
+            authority = f"127.0.0.1:{port}"
+            request = Request(
+                f"http://{authority}/api/state",
+                headers={"Origin": f"http://{authority}"},
+            )
+            with urlopen(request, timeout=2) as response:
+                self.assertEqual(response.status, 200)
+
+            with self.assertRaises(HTTPError) as hostile:
+                request = Request(
+                    f"http://{authority}/api/state",
+                    headers={"Host": "evil.invalid"},
+                )
+                urlopen(request, timeout=2)
+            self.assertEqual(hostile.exception.code, 403)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+            self.assertFalse(thread.is_alive())
+
     def test_default_http_port_authority_may_omit_port(self):
         self.server.configured_host = "agent.example"
         self.server.server_port = 80
@@ -318,6 +349,37 @@ class WebTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(writes_while_locked, [False])
 
+    @unittest.skipUnless(socket.has_ipv6, "IPv6 is unavailable")
+    def test_ipv6_loopback_server_uses_ipv6_and_bracketed_authority(self):
+        server = create_server(
+            ("::1", 0),
+            Path(self.temp.name) / "ipv6.db",
+            environment={},
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            host, port = server.server_address[:2]
+            authority = f"[{host}]:{port}"
+            wire = (
+                "GET /api/state HTTP/1.1\r\n"
+                f"Host: {authority}\r\n"
+                f"Origin: http://{authority}\r\n"
+                "Connection: close\r\n\r\n"
+            ).encode("ascii")
+            with socket.create_connection((host, port), timeout=2) as connection:
+                connection.sendall(wire)
+                connection.shutdown(socket.SHUT_WR)
+                response = connection.recv(4096)
+
+            self.assertEqual(server.address_family, socket.AF_INET6)
+            self.assertTrue(response.startswith(b"HTTP/1.0 200"))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+            self.assertFalse(thread.is_alive())
+
     @patch("mini_agent.web.load_dotenv")
     @patch("mini_agent.web.threading.Timer")
     @patch("mini_agent.web.create_server")
@@ -375,6 +437,31 @@ class WebTests(unittest.TestCase):
         server_factory.assert_called_once_with(
             ("0.0.0.0", 9012),
             str(self.db_path),
+        )
+        server.server_close.assert_called_once_with()
+
+    @patch("mini_agent.web.load_dotenv")
+    @patch("mini_agent.web.threading.Timer")
+    @patch("mini_agent.web.create_server")
+    def test_main_brackets_ipv6_browser_url(
+        self,
+        server_factory,
+        timer_class,
+        _load_dotenv,
+    ):
+        server = Mock()
+        server.server_port = 8123
+        server.serve_forever.side_effect = KeyboardInterrupt
+        server_factory.return_value = server
+
+        exit_code = main(["--db", str(self.db_path), "--host", "::1"])
+
+        self.assertEqual(exit_code, 0)
+        server_factory.assert_called_once_with(("::1", 8000), str(self.db_path))
+        timer_class.assert_called_once_with(
+            0.25,
+            __import__("webbrowser").open,
+            args=("http://[::1]:8123",),
         )
         server.server_close.assert_called_once_with()
 

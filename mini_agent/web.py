@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import socket
 import sys
 import threading
 import webbrowser
@@ -26,10 +27,14 @@ STATIC_FILES = {
 }
 
 
-def _authorities_for(host: str, port: int) -> set[str]:
-    host = host.lower()
+def _format_host(host: str) -> str:
     if ":" in host and not host.startswith("["):
-        host = f"[{host}]"
+        return f"[{host}]"
+    return host
+
+
+def _authorities_for(host: str, port: int) -> set[str]:
+    host = _format_host(host.lower())
     authorities = {f"{host}:{port}"}
     if port == 80:
         authorities.add(host)
@@ -58,10 +63,15 @@ class AgentHTTPServer(ThreadingHTTPServer):
         self.environment = environment
         self.chat_lock = threading.Lock()
         self.state_lock = threading.RLock()
+        self.address_family = (
+            socket.AF_INET6 if ":" in address[0] else socket.AF_INET
+        )
         super().__init__(address, AgentRequestHandler)
 
-    def allowed_authorities(self) -> set[str]:
+    def allowed_authorities(self, local_host: str | None = None) -> set[str]:
         hosts = {self.configured_host, self.server_address[0]}
+        if local_host:
+            hosts.add(local_host)
         if hosts & {"127.0.0.1", "localhost", "::1"}:
             hosts.update({"127.0.0.1", "localhost", "::1"})
         return set().union(
@@ -95,7 +105,8 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             self._json(500, {"error": "本地 Agent 服务发生未预期错误"})
 
     def _validate_local_request(self) -> None:
-        local_hosts = self.server.allowed_authorities()
+        local_host = self.connection.getsockname()[0]
+        local_hosts = self.server.allowed_authorities(local_host)
         host = self.headers.get("Host", "").lower()
         if host not in local_hosts:
             raise RequestProblem(403, "请求必须使用本地 Host")
@@ -266,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {safe_text(str(error), key)}", file=sys.stderr)
         return 2
 
-    url = f"http://{args.host}:{server.server_port}"
+    url = f"http://{_format_host(args.host)}:{server.server_port}"
     if args.host not in {"127.0.0.1", "localhost", "::1"}:
         print("Warning: the demo is listening beyond this computer.")
     print(f"Minimal Agent web: {url}")
