@@ -62,13 +62,13 @@ python -m mini_agent --session weather-chat
 python -m mini_agent --session demo --once "计算 25 * 18"
 
 # 运行全部离线自动测试；不会访问网络
-python -m unittest discover -v
+python -m unittest discover -s tests -v
 ```
 
 本机可直接这样运行同一套测试：
 
 ```powershell
-& 'D:\DevData\conda-envs\asset-intel\python.exe' -m unittest discover -v
+& 'D:\DevData\conda-envs\asset-intel\python.exe' -m unittest discover -s tests -v
 ```
 
 默认数据库是 `.agent-data/agent.db`；可用 `--db .agent-data/another.db` 改到另一个 SQLite 文件。交互模式中的本地命令有 `/new [标题]`、`/sessions`、`/use <session_id>`、`/trace`、`/help` 和 `/exit`。只有普通聊天消息才需要 Key；因此可以先启动后用 `/help` 熟悉命令。
@@ -86,7 +86,7 @@ python -m unittest discover -v
 
 ## Agent 如何完成一次问题：8 步上限的循环
 
-一次普通输入先被保存为本轮用户消息。程序在第一次模型请求前组装 context，然后最多重复 8 次以下过程：
+一次普通输入先被保存为本轮用户消息。程序在第一次模型请求前组装 context，然后最多进行 8 次模型迭代：
 
 1. 从 SQLite 取当前 session 的摘要和未压缩消息。
 2. 发送 system prompt、当前日期、摘要、历史消息和工具 Schema 给 DeepSeek。
@@ -95,7 +95,7 @@ python -m unittest discover -v
 5. 执行一个或多个工具；未知工具或坏参数会变成带 `ok: false` 的工具结果，返回给模型修正。
 6. 保存工具调用、工具结果和 trace，再把它们作为下一次循环的 context。
 7. 如果模型给出不带工具调用的普通 `content`，保存并显示它，循环结束。
-8. 若连续工具调用超过 8 步，停止并记录 `loop_limit` trace，避免无限循环。
+8. 如果在最多 8 次模型迭代后仍没有最终答案，运行时停止并记录 `loop_limit` trace，避免无限循环。
 
 ## 两个终端验证 session 隔离
 
@@ -120,7 +120,7 @@ python -m mini_agent --session weekly-report
 发给模型的顺序是：
 
 1. 第一条 system 消息：Agent 的固定规则和当天日期；
-2. 第二条 system 消息：明确标记为当前 **Session 记忆**的摘要（memory）；
+2. 仅当当前 session 存在摘要时，才有第二条 system 消息：明确标记为当前 **Session 记忆**的摘要（memory）；
 3. 当前 session 近期完整消息，包括用户、助手和工具消息。
 
 工具 Schema 通过 API 的 `tools` 字段传递，不会拼成普通聊天文本。这样固定规则优先，记忆提供较早背景，最近原文保留最精确的上下文。
@@ -147,11 +147,11 @@ python -m mini_agent --session weekly-report
 
 | 现象 | 先做什么 |
 | --- | --- |
-| 提示 `DEEPSEEK_API_KEY is required` | 在**同一个** PowerShell 窗口按上文设置 Key，再重试。 |
+| 提示 `DEEPSEEK_API_KEY is required` | 检查项目根目录的 `.env` 是否有非空 `DEEPSEEK_API_KEY` 行；或在**当前** PowerShell 窗口按上文设置 Key 后再重试。 |
 | HTTP 401 / 403 | Key 无效、过期或没有权限；检查 Key 和账号配置。程序不会重试认证错误。 |
 | HTTP 429 | 服务繁忙或限流；客户端会最多重试两次，仍失败请稍后重试。 |
 | 超时、HTTP 5xx 或网络错误 | 客户端会最多重试两次；确认网络和 Base URL 后重试。 |
-| `Agent` 超过最大循环步数 | 模型连续请求工具超过 8 步；用 `/trace` 查看最后调用，改写问题使目标更明确后再试。 |
+| `Agent` 超过最大循环步数 | 最多 8 次模型迭代后没有最终答案；用 `/trace` 查看最后调用，改写问题使目标更明确后再试。 |
 
 ## 文件与限制
 
@@ -162,7 +162,7 @@ python -m mini_agent --session weekly-report
 - `mini_agent/llm.py`：DeepSeek HTTP 请求、解析和重试。
 - `PROMPTS.md`：运行时使用的两个 prompt 原文与约束说明。
 - `PROBLEM_SOLVING.md`：只记录本项目开发中真实发生过的问题。
-- `demo.ps1`：不显示 Key 的双 session 录屏提示。
+- `demo.ps1`：不显示 Key 的双 session 录屏提示；它会检查当前 PowerShell 环境或脚本旁的 `.env` 是否已配置。
 
 首版不包含网页界面、多用户权限、向量数据库或语义检索、流式输出、真实搜索 API、真实天气 API、并行工具调用或分布式执行。`search` 与 `weather` 是 mock，不能当作实时外部事实。
 
@@ -178,7 +178,7 @@ python -m mini_agent --session live-direct --once "只回答：连接成功"
 python -m mini_agent --session live-tools --once "请务必使用 calculator 工具计算 25 * 18，然后告诉我结果"
 ```
 
-若要录制两个 session 的完整演示，可先执行下列命令获取逐步提示（只对这个子进程绕过本机 PowerShell 的脚本执行策略，不会修改系统设置），再分别按“两个终端验证 session 隔离”的命令操作，最后运行 `python -m unittest discover -v`：
+若要录制两个 session 的完整演示，可先执行下列命令获取逐步提示（只对这个子进程绕过本机 PowerShell 的脚本执行策略，不会修改系统设置），再分别按“两个终端验证 session 隔离”的命令操作，最后运行 `python -m unittest discover -s tests -v`：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\demo.ps1

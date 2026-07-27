@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
+import shutil
 import subprocess
+import tempfile
 import unittest
 
 
@@ -36,28 +38,66 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("deepseek-v4-pro", readme)
         self.assertIn("python -m unittest discover", readme)
 
-    def test_demo_script_only_checks_for_a_key_and_lists_recording_steps(self):
+    def test_demo_script_accepts_environment_or_local_dotenv_without_exposing_key(self):
         environment = os.environ.copy()
         environment.pop("DEEPSEEK_API_KEY", None)
-        result = subprocess.run(
+        with tempfile.TemporaryDirectory() as directory:
+            temporary_directory = Path(directory)
+            script_path = temporary_directory / "demo.ps1"
+            shutil.copyfile("demo.ps1", script_path)
+
+            missing_result = self.run_demo(script_path, environment)
+            self.assertEqual(missing_result.returncode, 1)
+            self.assertIn("未检测到 DEEPSEEK_API_KEY", missing_result.stdout)
+
+            dotenv_path = temporary_directory / ".env"
+            dotenv_path.write_text("DEEPSEEK_API_KEY=configured\n", encoding="utf-8")
+            dotenv_result = self.run_demo(script_path, environment)
+            self.assertEqual(dotenv_result.returncode, 0)
+            self.assertIn("准备就绪", dotenv_result.stdout)
+            self.assertNotIn("configured", dotenv_result.stdout)
+            for step in [
+                "python -m mini_agent --session weather-chat",
+                "查询杭州明天天气；如有雨，添加待办带雨伞",
+                "python -m mini_agent --session weekly-report",
+                "生成一份本周工作周报，并添加待办检查周报",
+                "重新打开 weather-chat",
+                "重新打开 weekly-report",
+                "/trace",
+                "python -m unittest discover -s tests -v",
+            ]:
+                self.assertIn(step, dotenv_result.stdout)
+
+            dotenv_path.unlink()
+            environment_result = self.run_demo(
+                script_path,
+                {**environment, "DEEPSEEK_API_KEY": "configured"},
+            )
+            self.assertEqual(environment_result.returncode, 0)
+            self.assertIn("准备就绪", environment_result.stdout)
+            self.assertNotIn("configured", environment_result.stdout)
+
+        script = Path("demo.ps1").read_text(encoding="utf-8")
+        self.assertNotIn("$env:DEEPSEEK_API_KEY", script)
+        self.assertNotIn("GetEnvironmentVariable", script)
+
+    @staticmethod
+    def run_demo(script_path, environment):
+        return subprocess.run(
             [
                 "powershell",
                 "-NoProfile",
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
-                "demo.ps1",
+                str(script_path),
             ],
             capture_output=True,
             check=False,
             encoding="utf-8",
             env=environment,
+            cwd=script_path.parent,
         )
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("未检测到 DEEPSEEK_API_KEY", result.stdout)
-        script = Path("demo.ps1").read_text(encoding="utf-8")
-        self.assertNotIn("$env:DEEPSEEK_API_KEY", script)
-        self.assertNotIn("GetEnvironmentVariable", script)
 
 
 if __name__ == "__main__":
