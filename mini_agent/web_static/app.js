@@ -4,6 +4,7 @@ const ui = {
   sessionList: document.querySelector("#session-list"),
   newSessionForm: document.querySelector("#new-session-form"),
   newSessionTitle: document.querySelector("#new-session-title"),
+  newSessionSubmit: document.querySelector("#new-session-form button[type='submit']"),
   chatList: document.querySelector("#chat-list"),
   chatForm: document.querySelector("#chat-form"),
   chatInput: document.querySelector("#chat-input"),
@@ -46,18 +47,32 @@ function setBusy(busy, message) {
   ui.chatInput.disabled = busy;
   ui.sendButton.disabled = busy;
   ui.newSessionTitle.disabled = busy;
-  ui.chatInput.required = !busy;
-  document.body.classList.toggle("is-busy", busy);
+  if (ui.newSessionSubmit) {
+    ui.newSessionSubmit.disabled = busy;
+  }
+
+  if (ui.quickPrompts) {
+    for (const button of ui.quickPrompts.querySelectorAll("button")) {
+      button.disabled = busy;
+    }
+  }
+
+  for (const button of ui.sessionList.querySelectorAll("[data-session-id]")) {
+    button.disabled = busy;
+  }
+
   if (message !== undefined) {
     setState(message, busy ? "info" : "info");
   }
+
+  document.body.classList.toggle("is-busy", busy);
 }
 
 function formatRole(role) {
   if (role === "user") {
     return "YOU";
   }
-  if (role === "agent") {
+  if (role === "assistant" || role === "agent") {
     return "AGENT";
   }
   return String(role || "TRACE").toUpperCase();
@@ -75,7 +90,12 @@ function traceLabel(eventType) {
   }[String(eventType)] || String(eventType || "UNKNOWN").toUpperCase();
 }
 
-function renderEmpty(target, text) {
+function renderEmpty(target, text, asListItem = false) {
+  if (asListItem) {
+    target.replaceChildren(element("li", "empty-state", text));
+    return;
+  }
+
   target.replaceChildren(element("p", "empty-state", text));
 }
 
@@ -83,7 +103,7 @@ function renderSessions(sessions = [], currentSessionId) {
   ui.sessionList.replaceChildren();
 
   if (!sessions.length) {
-    renderEmpty(ui.sessionList, "å½“å‰æ— ä¼šè¯ï¼Œè¯·å…ˆåˆ›å»º");
+    renderEmpty(ui.sessionList, "µ±Ç°ÎÞ»á»°£¬ÇëÏÈ´´½¨");
     return;
   }
 
@@ -92,11 +112,17 @@ function renderSessions(sessions = [], currentSessionId) {
     button.type = "button";
     button.dataset.sessionId = session.id;
     button.classList.toggle("active", session.id === currentSessionId);
+    button.setAttribute("aria-pressed", session.id === currentSessionId ? "true" : "false");
+    button.setAttribute("aria-current", session.id === currentSessionId ? "page" : "false");
     button.append(
-      element("strong", "", session.title || "(æœªå‘½åä¼šè¯)"),
+      element("strong", "", session.title || "(Î´ÃüÃû»á»°)"),
       element("span", "", session.id),
     );
     ui.sessionList.append(button);
+  }
+
+  for (const button of ui.sessionList.querySelectorAll("[data-session-id]")) {
+    button.disabled = page.busy;
   }
 }
 
@@ -104,14 +130,17 @@ function renderMessages(messages = []) {
   ui.chatList.replaceChildren();
 
   if (!messages.length) {
-    renderEmpty(ui.chatList, "ä¼šè¯ä¸­è¿˜æ²¡æœ‰æ¶ˆæ¯ã€‚å‘é€ä¸€æ¡å¼€å§‹äº¤æµã€‚");
+    renderEmpty(ui.chatList, "»á»°ÖÐ»¹Ã»ÓÐÏûÏ¢¡£·¢ËÍÒ»Ìõ¿ªÊ¼½»Á÷¡£", false);
     return;
   }
 
   for (const message of messages) {
     const role = formatRole(message.role);
-    const row = element("article", `message ${role === "YOU" ? "user" : ""}`);
-    row.append(element("strong", "message-role", role), element("p", "message-content", message.content || ""));
+    const row = element("article", `message ${role === "YOU" ? "user" : ""}");
+    row.append(
+      element("strong", "message-role", role),
+      element("p", "message-content", message.content || ""),
+    );
     ui.chatList.append(row);
   }
 
@@ -122,7 +151,7 @@ function renderTraces(traces = []) {
   ui.traceList.replaceChildren();
 
   if (!traces.length) {
-    renderEmpty(ui.traceList, "æš‚æ—  traceï¼šç­‰å¾… Agent å®Œæˆä¸€æ¬¡å¾ªçŽ¯ã€‚");
+    renderEmpty(ui.traceList, "ÔÝÎÞ trace£ºµÈ´ý Agent Íê³ÉÒ»´ÎÑ­»·¡£", false);
     return;
   }
 
@@ -135,7 +164,7 @@ function renderTraces(traces = []) {
     const heading = element("div", "trace-heading");
     heading.append(
       element("strong", "", traceLabel(trace.event)),
-      element("span", "", `step ${trace.step} Â· ${trace.duration_ms ?? "?"}ms`),
+      element("span", "", `step ${trace.step} ¡¤ ${trace.duration_ms ?? "?"}ms`),
     );
 
     const data = element("pre", "trace-data");
@@ -151,14 +180,14 @@ function renderTodos(todos = []) {
   ui.todoList.replaceChildren();
 
   if (!todos.length) {
-    renderEmpty(ui.todoList, "å½“å‰ session æš‚æ— å¾…åŠžã€‚");
+    renderEmpty(ui.todoList, "µ±Ç° session ÔÝÎÞ´ý°ì¡£", true);
     return;
   }
 
   for (const todo of todos) {
     const row = element("li", todo.done ? "done" : "");
     row.append(
-      element("span", "todo-status", todo.done ? "å®Œæˆ" : "å¾…åŠž"),
+      element("span", "todo-status", todo.done ? "Íê³É" : "´ý°ì"),
       element("span", "", todo.text),
     );
     ui.todoList.append(row);
@@ -174,7 +203,7 @@ function render(state) {
   page.sessionId = state.current_session_id || null;
   const active = sessions.find((item) => item.id === page.sessionId);
 
-  setText(ui.currentSession, active ? active.title || active.id : "æœªé€‰æ‹©ä¼šè¯");
+  setText(ui.currentSession, active ? active.title || active.id : "Î´Ñ¡Ôñ»á»°");
   setRuntimeState("Agent loop: ready");
   renderSessions(sessions, page.sessionId);
   renderMessages(messages);
@@ -184,7 +213,21 @@ function render(state) {
 
 function setRuntimeState(text) {
   const marker = element("span");
+  marker.setAttribute("aria-hidden", "true");
+  setText(marker, "");
   ui.runtimeState.replaceChildren(marker, ` ${text}`);
+}
+
+function parseJsonSafely(text, label) {
+  if (!text) {
+    throw new Error(`${label}: empty response body`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${label}: invalid JSON`);
+  }
 }
 
 async function request(path, options = {}) {
@@ -192,11 +235,16 @@ async function request(path, options = {}) {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
+
   const bodyText = await response.text();
-  let payload = {};
+  let payload;
+
   try {
-    payload = bodyText ? JSON.parse(bodyText) : {};
+    payload = parseJsonSafely(bodyText, `${path}`);
   } catch (error) {
+    if (response.ok) {
+      throw error;
+    }
     payload = {};
   }
 
@@ -208,15 +256,27 @@ async function request(path, options = {}) {
   return payload;
 }
 
+function ensureStatePayload(payload, actionLabel) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error(`${actionLabel} Ê§°Ü£ºÏìÓ¦²»ÊÇºÏ·¨ JSON`);
+  }
+
+  if (!payload.state || typeof payload.state !== "object") {
+    throw new Error(`${actionLabel} Ê§°Ü£ºÏìÓ¦È±ÉÙ state`);
+  }
+
+  return payload.state;
+}
+
 function describeBusyError(error) {
-  const text = (error && error.message ? error.message : String(error || "æœªçŸ¥é”™è¯¯")).trim();
+  const text = (error && error.message ? error.message : String(error || "Î´Öª´íÎó")).trim();
   if (text.includes("session")) {
-    return `${text}ï¼Œè¯·å…ˆåˆ›å»ºæˆ–é€‰æ‹©ä¸€ä¸ªä¼šè¯ã€‚`;
+    return `${text}£¬ÇëÏÈ´´½¨»òÑ¡ÔñÒ»¸ö»á»°¡£`;
   }
   if (text.includes("400") || text.includes("Bad Request")) {
-    return `${text}ï¼Œè¯·æ£€æŸ¥è¾“å…¥æ˜¯å¦å®Œæ•´ã€‚`;
+    return `${text}£¬Çë¼ì²éÊäÈëÊÇ·ñÍêÕû¡£`;
   }
-  return text || "è¯·æ±‚å¤±è´¥ï¼Œè¯·ç¨åŽé‡è¯•ã€‚";
+  return text || "ÇëÇóÊ§°Ü£¬ÇëÉÔºóÖØÊÔ¡£";
 }
 
 async function refresh(sessionId = null) {
@@ -236,7 +296,7 @@ function onSessionClick(event) {
     return;
   }
 
-  setBusy(true, "æ­£åœ¨åˆ‡æ¢ä¼šè¯...");
+  setBusy(true, "ÕýÔÚÇÐ»»»á»°...");
   refresh(sessionId)
     .then(() => {
       setState("");
@@ -264,21 +324,20 @@ async function createSession(event) {
 
   const title = ui.newSessionTitle.value.trim();
   if (!title) {
-    setState("è¯·è¾“å…¥ä¼šè¯æ ‡é¢˜ã€‚", "error");
+    setState("ÇëÊäÈë»á»°±êÌâ¡£", "error");
     return;
   }
 
   try {
-    setBusy(true, "æ­£åœ¨åˆ›å»ºä¼šè¯...");
+    setBusy(true, "ÕýÔÚ´´½¨»á»°...");
     const payload = await request("/api/sessions", {
       method: "POST",
       body: JSON.stringify({ title }),
     });
+    const state = ensureStatePayload(payload, "»á»°´´½¨");
+    render(state);
     ui.newSessionTitle.value = "";
-    if (payload.state) {
-      render(payload.state);
-    }
-    setState("ä¼šè¯åˆ›å»ºæˆåŠŸã€‚", "ok");
+    setState("»á»°´´½¨³É¹¦¡£", "ok");
   } catch (error) {
     setState(describeBusyError(error), "error");
   } finally {
@@ -292,18 +351,18 @@ async function sendMessage(event) {
     return;
   }
   if (!page.sessionId) {
-    setState("è¯·å…ˆé€‰æ‹©æˆ–åˆ›å»ºä¼šè¯ï¼Œå†å‘é€æ¶ˆæ¯ã€‚", "error");
+    setState("ÇëÏÈÑ¡Ôñ»ò´´½¨»á»°£¬ÔÙ·¢ËÍÏûÏ¢¡£", "error");
     return;
   }
 
   const message = ui.chatInput.value.trim();
   if (!message) {
-    setState("è¯·è¾“å…¥æ¶ˆæ¯å†…å®¹ã€‚", "error");
+    setState("ÇëÊäÈëÏûÏ¢ÄÚÈÝ¡£", "error");
     return;
   }
 
   try {
-    setBusy(true, "Agent æ­£åœ¨å¤„ç†ä¸­...");
+    setBusy(true, "Agent ÕýÔÚ´¦ÀíÖÐ...");
     const payload = await request("/api/chat", {
       method: "POST",
       body: JSON.stringify({
@@ -311,11 +370,10 @@ async function sendMessage(event) {
         message,
       }),
     });
+    const state = ensureStatePayload(payload, "ÁÄÌì");
     ui.chatInput.value = "";
-    if (payload.state) {
-      render(payload.state);
-    }
-    setState(payload.answer ? "å·²å®Œæˆï¼šæ”¶åˆ°å›žå¤ã€‚" : "å·²å®Œæˆã€‚", "ok");
+    render(state);
+    setState("ÒÑÍê³É£ºÊÕµ½»Ø¸´¡£", "ok");
   } catch (error) {
     setState(describeBusyError(error), "error");
   } finally {
@@ -348,8 +406,8 @@ ui.quickPrompts.addEventListener("click", onQuickPrompt);
 ui.chatForm.addEventListener("submit", sendMessage);
 ui.chatInput.addEventListener("keydown", onChatKeydown);
 
-setState("åŠ è½½ä¼šè¯ä¸­...");
-setBusy(true, "åŠ è½½ä¼šè¯ä¸­...");
+setState("¼ÓÔØ»á»°ÖÐ...");
+setBusy(true, "¼ÓÔØ»á»°ÖÐ...");
 refresh()
   .then(() => {
     setState("", "ok");

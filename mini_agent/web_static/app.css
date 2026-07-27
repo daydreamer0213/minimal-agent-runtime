@@ -28,6 +28,7 @@ body {
 body {
   margin: 0;
   min-width: 320px;
+  overflow-x: hidden;
   background: var(--canvas);
   color: var(--ink);
   font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
@@ -48,29 +49,25 @@ button {
   font-weight: 700;
   min-height: 44px;
   min-width: 44px;
-  transition: transform 120ms ease;
-}
-
-button:hover {
-  transform: translateY(-1px);
 }
 
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid rgb(49 94 246 / 30%);
+  outline: 3px solid #112f9b;
   outline-offset: 2px;
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
 .shell {
   display: grid;
-  grid-template-columns: 240px minmax(440px, 1fr) 360px;
+  grid-template-columns: minmax(220px, 240px) minmax(360px, 1fr) minmax(280px, 320px);
   min-height: 100vh;
+  width: 100%;
 }
 
 .sessions-panel,
@@ -303,12 +300,12 @@ textarea {
 
 .status-message {
   min-height: 22px;
-  color: var(--muted);
+  color: #243a5f;
   font-size: 13px;
 }
 
 .status-message[data-state="error"] {
-  color: var(--red);
+  color: #9c2a22;
 }
 
 .status-message[data-state="ok"] {
@@ -442,8 +439,13 @@ textarea {
   font: 800 10px/1 "Cascadia Code", Consolas, monospace;
 }
 
-.todo-list li.done { opacity: 0.6; }
-.todo-list li.done .todo-status { color: #8fb0ff; }
+.todo-list li.done {
+  opacity: 0.6;
+}
+
+.todo-list li.done .todo-status {
+  color: #8fb0ff;
+}
 
 .empty-state {
   color: var(--muted);
@@ -460,7 +462,7 @@ textarea {
 
 @media (max-width: 980px) {
   .shell {
-    grid-template-columns: 210px minmax(330px, 1fr);
+    grid-template-columns: minmax(220px, 1fr) minmax(260px, 360px);
     grid-template-areas:
       "sessions chat"
       "inspector inspector";
@@ -468,18 +470,30 @@ textarea {
 
   .sessions-panel { grid-area: sessions; }
   .chat-panel { grid-area: chat; }
-  .inspector-panel { grid-area: inspector; grid-template-columns: 1fr 1fr; grid-template-rows: none; }
+  .inspector-panel {
+    grid-area: inspector;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: none;
+  }
 }
 
 @media (max-width: 680px) {
   .shell {
-    display: block;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "chat"
+      "sessions"
+      "inspector";
   }
 
-  .chat-panel { order: 1; padding: 18px 12px; }
-  .sessions-panel { order: 2; border-right: 0; border-top: 1px solid var(--line); padding-bottom: 20px; }
+  .chat-panel { padding: 18px 12px; }
+  .sessions-panel {
+    border-right: 0;
+    border-top: 1px solid var(--line);
+    padding-bottom: 20px;
+  }
   .inspector-panel {
-    order: 3;
     display: block;
     margin-top: 1px;
   }
@@ -492,13 +506,41 @@ textarea {
   .message { max-width: 92%; }
 }
 
+@media (max-width: 375px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "chat"
+      "sessions"
+      "inspector";
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .trace-card {
     animation: trace-in 180ms ease-out;
   }
 
+  button {
+    transition: transform 120ms ease;
+  }
+
+  button:hover {
+    transform: translateY(-1px);
+  }
+
   @keyframes trace-in {
     from { opacity: 0; transform: translateY(5px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trace-card {
+    animation: none;
+  }
+
+  button {
+    transition: none;
   }
 }
