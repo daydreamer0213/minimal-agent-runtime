@@ -2,6 +2,7 @@
 
 import ast
 import hashlib
+import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -118,22 +119,35 @@ def _evaluate_expression(expression: str) -> int | float:
     except SyntaxError as error:
         raise ValueError("不支持的表达式") from error
 
+    def require_finite_number(value: Any, message: str) -> int | float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(message)
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ValueError("计算结果必须是有限数字")
+        return value
+
     def evaluate(node: ast.AST) -> int | float:
         if isinstance(node, ast.Constant):
             if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
                 raise ValueError("不支持的常量")
-            return node.value
+            return require_finite_number(node.value, "不支持的常量")
         if isinstance(node, ast.UnaryOp) and type(node.op) in _ALLOWED_UNARY_OPERATORS:
-            return _ALLOWED_UNARY_OPERATORS[type(node.op)](evaluate(node.operand))
+            return require_finite_number(
+                _ALLOWED_UNARY_OPERATORS[type(node.op)](evaluate(node.operand)),
+                "不支持的计算结果",
+            )
         if isinstance(node, ast.BinOp) and type(node.op) in _ALLOWED_BINARY_OPERATORS:
             left = evaluate(node.left)
             right = evaluate(node.right)
             if isinstance(node.op, ast.Pow) and abs(right) > 20:
                 raise ValueError("指数绝对值不能超过 20")
-            return _ALLOWED_BINARY_OPERATORS[type(node.op)](left, right)
+            return require_finite_number(
+                _ALLOWED_BINARY_OPERATORS[type(node.op)](left, right),
+                "不支持的计算结果",
+            )
         raise ValueError("不支持的表达式")
 
-    return evaluate(tree.body)
+    return require_finite_number(evaluate(tree.body), "不支持的计算结果")
 
 
 def _calculator(arguments: dict, _session_id: str, _store: SessionStore) -> dict:

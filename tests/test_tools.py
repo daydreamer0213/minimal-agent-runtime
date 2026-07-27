@@ -42,6 +42,12 @@ class ToolTests(unittest.TestCase):
         self.assertFalse(limited["ok"])
         self.assertIn("指数", limited["error"])
 
+    def test_calculator_rejects_non_json_numeric_results(self):
+        complex_result = self.execute("calculator", {"expression": "(-1) ** 0.5"})
+        infinite_result = self.execute("calculator", {"expression": "1e309"})
+        self.assertFalse(complex_result["ok"])
+        self.assertFalse(infinite_result["ok"])
+
     def test_schema_reports_missing_argument(self):
         result = self.execute("weather", {"city": "杭州"})
         self.assertEqual(result["ok"], False)
@@ -72,6 +78,15 @@ class ToolTests(unittest.TestCase):
         listed = self.execute("todo", {"action": "list"})
         self.assertTrue(added["ok"])
         self.assertEqual(listed["items"][0]["text"], "带雨伞")
+
+        other_session = self.store.create_session("other", "other-tools")
+        other_listed = self.registry.execute("todo", {"action": "list"}, other_session, self.store)
+        other_done = self.registry.execute(
+            "todo", {"action": "done", "id": added["item"]["id"]}, other_session, self.store
+        )
+        self.assertEqual(other_listed["items"], [])
+        self.assertEqual(other_done, {"ok": True, "done": False})
+        self.assertFalse(self.execute("todo", {"action": "list"})["items"][0]["done"])
 
     def test_todo_done_requires_positive_id_and_updates_current_session(self):
         added = self.execute("todo", {"action": "add", "text": "带雨伞"})
