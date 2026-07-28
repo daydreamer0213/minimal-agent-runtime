@@ -73,6 +73,31 @@ python -m unittest discover -s tests -v
 
 默认数据库是 `.agent-data/agent.db`；可用 `--db .agent-data/another.db` 改到另一个 SQLite 文件。交互模式中的本地命令有 `/new [标题]`、`/sessions`、`/use <session_id>`、`/trace`、`/help` 和 `/exit`。只有普通聊天消息才需要 Key；因此可以先启动后用 `/help` 熟悉命令。
 
+## 网页演示：更直观看到 Agent 如何工作
+
+在项目根目录运行下面的命令：
+
+```powershell
+# 通用写法
+python -m mini_agent.web
+
+# 如果本机的 python 命令不可用，可使用本机已配置的 Python
+& 'D:\DevData\conda-envs\asset-intel\python.exe' -m mini_agent.web
+```
+
+网页默认监听 `http://127.0.0.1:8000`，并会尝试自动打开浏览器。它是只供这台电脑访问的本机服务，不是公网服务；若浏览器没有自动打开，请手动复制这个地址。API Key 仍由 Python 从当前 PowerShell 环境或项目根目录的 `.env` 读取，API Key 不会进入浏览器。
+
+左侧可创建和切换相互独立的 session，例如 `weather-chat` 和 `weekly-report`；中间用于发送消息；右侧会显示当前 session 的 Agent Trace 和待办。网页与 CLI 共用同一个 SQLite 数据库和 Agent Runtime，所以仍可通过 `python -m mini_agent` 使用 CLI。
+
+录屏时可按以下顺序操作：
+
+1. 在 `weather-chat` 发送天气和待办请求，例如“查询杭州明天天气；如有雨，添加待办带雨伞”。
+2. 新建 `weekly-report`，发送周报和待办请求，例如“生成一份本周工作周报，并添加待办检查周报”。
+3. 切回 `weather-chat`，继续追问天气和待办。
+4. 切回 `weekly-report`，继续追问周报。
+5. 展示右侧的 Agent Trace 与待办，确认不同 session 的记录不会串在一起。
+6. 回到终端运行 `python -m unittest discover -s tests -v`。
+
 ## 四个工具：模型可选用的能力
 
 工具由模型按请求决定是否调用；你通常用自然语言描述目标，而不是手动粘贴 JSON。下列 JSON 是模型实际会收到的参数形状：

@@ -38,19 +38,42 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("deepseek-v4-pro", readme)
         self.assertIn("python -m unittest discover", readme)
 
+    def test_readme_and_demo_cover_the_local_web_ui(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        demo = Path("demo.ps1").read_text(encoding="utf-8")
+
+        for text in [
+            "python -m mini_agent.web",
+            "http://127.0.0.1:8000",
+            "本机服务",
+            "API Key 不会进入浏览器",
+            "weather-chat",
+            "weekly-report",
+            "仍可通过 `python -m mini_agent` 使用 CLI",
+        ]:
+            self.assertIn(text, readme)
+        for text in [
+            "python -m mini_agent.web",
+            "天气和待办",
+            "周报和待办",
+            "Agent Trace",
+            "python -m unittest discover -s tests -v",
+        ]:
+            self.assertIn(text, demo)
+
     def test_demo_script_accepts_environment_or_local_dotenv_without_exposing_key(self):
         environment = os.environ.copy()
         environment.pop("DEEPSEEK_API_KEY", None)
         script = Path("demo.ps1").read_text(encoding="utf-8")
+        self.assertEqual(Path("demo.ps1").read_bytes()[:3], b"\xef\xbb\xbf")
         self.assertNotIn("$env:DEEPSEEK_API_KEY", script)
         self.assertNotIn("GetEnvironmentVariable", script)
         for guide_text in [
             "未检测到 DEEPSEEK_API_KEY",
             "准备就绪",
-            "查询杭州明天天气；如有雨，添加待办带雨伞",
-            "生成一份本周工作周报，并添加待办检查周报",
-            "重新打开 weather-chat",
-            "重新打开 weekly-report",
+            "天气和待办",
+            "周报和待办",
+            "分别切回两个 session 继续追问",
         ]:
             self.assertIn(guide_text, script)
 
@@ -69,9 +92,8 @@ class DocumentationTests(unittest.TestCase):
             self.assertEqual(dotenv_result.returncode, 0)
             self.assertNotIn(b"configured", dotenv_result.stdout)
             for command_fragment in [
-                b"python -m mini_agent --session weather-chat",
-                b"python -m mini_agent --session weekly-report",
-                b"/trace",
+                b"python -m mini_agent.web",
+                b"Agent Trace",
                 b"python -m unittest discover -s tests -v",
             ]:
                 self.assertIn(command_fragment, dotenv_result.stdout)
