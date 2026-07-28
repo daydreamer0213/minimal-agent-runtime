@@ -7,6 +7,17 @@ import unittest
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_problem_solving_records_web_error_recovery_in_utf8(self):
+        document = Path("PROBLEM_SOLVING.md").read_text(encoding="utf-8")
+        old_title = "## 8. GBK 窗口不能直接输出含 emoji 的中文周报"
+        new_title = "## 任务 7 错误态修复记录"
+
+        self.assertIn(old_title, document)
+        self.assertIn(new_title, document)
+        self.assertIn(f"\n\n{new_title}", document)
+        self.assertNotIn("寮€", document)
+        self.assertNotIn("鍒濆", document)
+
     def test_dotenv_template_and_automatic_loading_are_documented(self):
         readme = Path("README.md").read_text(encoding="utf-8")
         example = Path(".env.example").read_text(encoding="utf-8")

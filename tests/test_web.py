@@ -44,6 +44,29 @@ class QueueLLM:
 
 
 class WebTests(unittest.TestCase):
+    def test_web_request_error_contract_and_send_input_order(self):
+        source = Path("mini_agent/web_static/app.js").read_text(encoding="utf-8")
+
+        request_start = source.index("async function request")
+        request_end = source.index("\nfunction ", request_start)
+        request_block = source[request_start:request_end]
+        for marker in [
+            "await fetch",
+            "TypeError",
+            "NETWORK_ERROR_MESSAGE",
+            "if (!response.ok)",
+            "payload.error || bodyText",
+        ]:
+            self.assertIn(marker, request_block)
+
+        send_start = source.index("async function sendMessage")
+        send_end = source.index("\nfunction ", send_start)
+        send_block = source[send_start:send_end]
+        self.assertLess(
+            send_block.index("render(state)"),
+            send_block.index('ui.chatInput.value = ""'),
+        )
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.db_path = Path(self.temp.name) / "agent.db"

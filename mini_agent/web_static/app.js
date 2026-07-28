@@ -22,6 +22,8 @@ const page = {
   busy: false,
 };
 
+const NETWORK_ERROR_MESSAGE = "无法连接本地服务，请确认服务器仍在运行，然后重试。";
+
 function setText(node, text) {
   node.textContent = text == null ? "" : String(text);
 }
@@ -253,7 +255,7 @@ async function request(path, options = {}) {
     });
   } catch (error) {
     if (error && error.name === "TypeError") {
-      throw new Error("无法连接本地服务，请确认服务器仍在运行，然后重试。");
+      throw new Error(NETWORK_ERROR_MESSAGE);
     }
     throw error;
   }
@@ -383,8 +385,8 @@ async function sendMessage(event) {
       }),
     });
     const state = ensureStatePayload(payload.state, "聊天");
-    ui.chatInput.value = "";
     render(state);
+    ui.chatInput.value = "";
     setState("已完成：收到回复。", "ok");
   } catch (error) {
     setState(describeBusyError(error), "error");
