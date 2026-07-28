@@ -95,7 +95,7 @@ python -m mini_agent.web
 2. 新建 `weekly-report`，发送周报和待办请求，例如“生成一份本周工作周报，并添加待办检查周报”。
 3. 切回 `weather-chat`，继续追问天气和待办。
 4. 切回 `weekly-report`，继续追问周报。
-5. 展示右侧的 Agent Trace 与待办，确认不同 session 的记录不会串在一起。
+5. 展示右侧的 Agent Trace 与待办，确认不同 session 的 Agent Trace 和待办不会串在一起。
 6. 回到终端运行 `python -m unittest discover -s tests -v`。
 
 ## 四个工具：模型可选用的能力
@@ -189,7 +189,7 @@ python -m mini_agent --session weekly-report
 - `PROBLEM_SOLVING.md`：只记录本项目开发中真实发生过的问题。
 - `demo.ps1`：不显示 Key 的双 session 录屏提示；它会检查当前 PowerShell 环境或脚本旁的 `.env` 是否已配置。
 
-首版不包含网页界面、多用户权限、向量数据库或语义检索、流式输出、真实搜索 API、真实天气 API、并行工具调用或分布式执行。`search` 与 `weather` 是 mock，不能当作实时外部事实。
+首版仍不包含公网部署、登录和多用户权限、流式输出、WebSocket 连接、向量数据库或语义检索、真实搜索 API、真实天气 API、并行工具调用或分布式执行。`search` 与 `weather` 是 mock，不能当作实时外部事实。
 
 ## 真实 API 冒烟测试（会访问网络并产生 API 使用）
 
@@ -203,7 +203,7 @@ python -m mini_agent --session live-direct --once "只回答：连接成功"
 python -m mini_agent --session live-tools --once "请务必使用 calculator 工具计算 25 * 18，然后告诉我结果"
 ```
 
-若要录制两个 session 的完整演示，可先执行下列命令获取逐步提示（只对这个子进程绕过本机 PowerShell 的脚本执行策略，不会修改系统设置），再分别按“两个终端验证 session 隔离”的命令操作，最后运行 `python -m unittest discover -s tests -v`：
+若要录制两个 session 的完整演示，可先执行下列命令获取逐步提示（只对这个子进程绕过本机 PowerShell 的脚本执行策略，不会修改系统设置）。运行 demo.ps1 后，请按“网页演示”章节中的顺序操作，最后运行 `python -m unittest discover -s tests -v`：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\demo.ps1

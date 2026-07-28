@@ -61,6 +61,20 @@ class DocumentationTests(unittest.TestCase):
         ]:
             self.assertIn(text, demo)
 
+    def test_web_recording_guide_keeps_sessions_and_fallback_unambiguous(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        demo = Path("demo.ps1").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "& 'D:\\DevData\\conda-envs\\asset-intel\\python.exe' -m mini_agent.web",
+            readme,
+        )
+        self.assertIn("不同 session 的 Agent Trace 和待办不会串在一起", readme)
+        self.assertIn("两个 session 的 Agent Trace 与待办互不串线", demo)
+        self.assertNotIn("首版不包含网页界面", readme)
+        self.assertIn("运行 demo.ps1 后，请按“网页演示”章节", readme)
+        self.assertNotIn("按“两个终端验证 session 隔离”的命令操作", readme)
+
     def test_demo_script_accepts_environment_or_local_dotenv_without_exposing_key(self):
         environment = os.environ.copy()
         environment.pop("DEEPSEEK_API_KEY", None)

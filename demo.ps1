@@ -19,6 +19,6 @@ Write-Host "   python -m mini_agent.web" ;
 Write-Host "2. 在 weather-chat 演示天气和待办" ;
 Write-Host "3. 在 weekly-report 演示周报和待办" ;
 Write-Host "4. 分别切回两个 session 继续追问" ;
-Write-Host "5. 展示右侧 Agent Trace 与当前 Session 待办" ;
+Write-Host "5. 展示右侧两个 session 的 Agent Trace 与待办互不串线" ;
 Write-Host "6. 运行完整 unittest" ;
 Write-Host "   python -m unittest discover -s tests -v" ;
