@@ -147,6 +147,7 @@ class WebTests(unittest.TestCase):
         self.assertIn('const state = ensureStatePayload(payload, "状态刷新");', script_text)
         self.assertIn('const state = ensureStatePayload(payload.state, "会话创建");', script_text)
         self.assertIn('const state = ensureStatePayload(payload.state, "聊天");', script_text)
+        self.assertIn("无法连接本地服务，请确认服务器仍在运行，然后重试。", script_text)
         self.assertIn('const requiredArrays = ["sessions", "messages", "traces", "todos"]', script_text)
         self.assertIn("Array.isArray(state[key])", script_text)
         self.assertIn("typeof state.current_session_id !== \"string\"", script_text)

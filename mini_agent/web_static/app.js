@@ -245,10 +245,18 @@ function ensureStatePayload(state, actionLabel) {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+  } catch (error) {
+    if (error && error.name === "TypeError") {
+      throw new Error("无法连接本地服务，请确认服务器仍在运行，然后重试。");
+    }
+    throw error;
+  }
 
   const bodyText = await response.text();
   let payload = {};
