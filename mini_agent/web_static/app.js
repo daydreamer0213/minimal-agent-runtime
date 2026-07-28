@@ -225,14 +225,9 @@ function parseJsonSafely(text, label) {
   }
 }
 
-function ensureStatePayload(payload, actionLabel) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    throw new Error(`${actionLabel} 失败：响应不是合法 JSON。`);
-  }
-
-  const state = payload.state;
+function ensureStatePayload(state, actionLabel) {
   if (!state || typeof state !== "object" || Array.isArray(state)) {
-    throw new Error(`${actionLabel} 失败：响应缺少 state。`);
+    throw new Error(`${actionLabel} 失败：响应不是合法 JSON。`);
   }
 
   if (typeof state.current_session_id !== "string" || state.current_session_id.length === 0) {
@@ -343,7 +338,7 @@ async function createSession(event) {
       method: "POST",
       body: JSON.stringify({ title }),
     });
-    const state = ensureStatePayload(payload, "会话创建");
+    const state = ensureStatePayload(payload.state, "会话创建");
     render(state);
     ui.newSessionTitle.value = "";
     setState("会话创建成功。", "ok");
@@ -379,7 +374,7 @@ async function sendMessage(event) {
         message,
       }),
     });
-    const state = ensureStatePayload(payload, "聊天");
+    const state = ensureStatePayload(payload.state, "聊天");
     ui.chatInput.value = "";
     render(state);
     setState("已完成：收到回复。", "ok");

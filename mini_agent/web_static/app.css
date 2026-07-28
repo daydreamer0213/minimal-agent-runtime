@@ -465,7 +465,7 @@ textarea {
   color: var(--status-busy);
 }
 
-@media (max-width: 1199px) and (min-width: 769px) {
+@media (max-width: 1199px) and (min-width: 768px) {
   .shell {
     grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
     grid-template-areas:
@@ -482,7 +482,7 @@ textarea {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .shell {
     display: grid;
     grid-template-columns: 1fr;
@@ -519,6 +519,10 @@ textarea {
       "sessions"
       "inspector";
   }
+
+  .sessions-panel { grid-area: sessions; }
+  .chat-panel { grid-area: chat; }
+  .inspector-panel { grid-area: inspector; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
