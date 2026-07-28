@@ -502,6 +502,9 @@ textarea {
     display: block;
     margin-top: 1px;
   }
+  .chat-panel { grid-area: chat; }
+  .sessions-panel { grid-area: sessions; }
+  .inspector-panel { grid-area: inspector; }
 
   .chat-header {
     flex-direction: column;
@@ -519,10 +522,6 @@ textarea {
       "sessions"
       "inspector";
   }
-
-  .sessions-panel { grid-area: sessions; }
-  .chat-panel { grid-area: chat; }
-  .inspector-panel { grid-area: inspector; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

@@ -162,6 +162,18 @@ class WebTests(unittest.TestCase):
         self.assertIn("@media (max-width: 375px)", css)
         self.assertIn("@media (prefers-reduced-motion: no-preference)", css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
+        mobile_start = css.index("@media (max-width: 767px)")
+        mobile_end = css.index("@media (max-width: 375px)", mobile_start)
+        mobile_block = css[mobile_start:mobile_end]
+        order = [
+            ".chat-panel { grid-area: chat; }",
+            ".sessions-panel { grid-area: sessions; }",
+            ".inspector-panel { grid-area: inspector; }",
+        ]
+        cursor = 0
+        for marker in order:
+            marker_index = mobile_block.index(marker, cursor)
+            cursor = marker_index + len(marker)
 
         status, body, headers = self.request("/app.js")
         self.assertEqual(status, 200)
