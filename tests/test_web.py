@@ -289,13 +289,13 @@ class WebTests(unittest.TestCase):
         self.assertEqual(empty.exception.code, 400)
         self.assertEqual(self.runtime_calls, 0)
 
-        oversized = b"x" * (32 * 1024 + 1)
+        body = b"{}"
         status, _ = self.raw_post(
             "/api/chat",
-            oversized,
+            body,
             {
                 "Content-Type": "application/json",
-                "Content-Length": str(len(oversized)),
+                "Content-Length": str(32 * 1024 + 1),
             },
         )
         self.assertEqual(status, 413)
