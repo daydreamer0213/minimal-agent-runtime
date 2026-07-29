@@ -159,8 +159,15 @@ class WebTests(unittest.TestCase):
 
         script_text = script.decode("utf-8")
         html = body.decode("utf-8")
-        self.assertIn('data-prompt="weather+todo', html)
-        self.assertIn('data-prompt="weekly report+todo', html)
+        self.assertIn(
+            'data-prompt="查询杭州明天天气，并使用 todo 工具添加一条“带雨伞”待办。"',
+            html,
+        )
+        self.assertIn(
+            'data-prompt="根据“本周完成 Agent 工具循环和网页界面”生成简短周报，'
+            '并使用 todo 工具添加一条“检查周报”待办。"',
+            html,
+        )
         self.assertIn('role === "assistant"', script_text)
         self.assertIn('return "AGENT";', script_text)
         self.assertIn("aria-current", script_text)

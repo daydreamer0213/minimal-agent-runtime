@@ -5,8 +5,23 @@ import subprocess
 import tempfile
 import unittest
 
+from mini_agent.prompts import AGENT_SYSTEM_PROMPT
+
 
 class DocumentationTests(unittest.TestCase):
+    def test_persistent_reminders_are_explicit_todo_intent(self):
+        prompt_document = Path("PROMPTS.md").read_text(encoding="utf-8")
+        readme = Path("README.md").read_text(encoding="utf-8")
+        rule = (
+            "用户要求“提醒我”“记住要做”或之后处理某件事时，"
+            "如果语义上需要持续保存，应调用 todo 的 add 操作创建待办，"
+            "不能只在回答中口头提醒。"
+        )
+
+        self.assertIn(rule, AGENT_SYSTEM_PROMPT)
+        self.assertIn(rule, prompt_document)
+        self.assertIn("使用 todo 工具添加一条“带雨伞”待办", readme)
+
     def test_problem_solving_records_web_error_recovery_in_utf8(self):
         document = Path("PROBLEM_SOLVING.md").read_text(encoding="utf-8")
         old_title = "## 8. GBK 窗口不能直接输出含 emoji 的中文周报"

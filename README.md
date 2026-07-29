@@ -91,7 +91,7 @@ python -m mini_agent.web
 
 录屏时可按以下顺序操作：
 
-1. 在 `weather-chat` 发送天气和待办请求，例如“查询杭州明天天气；如有雨，添加待办带雨伞”。
+1. 在 `weather-chat` 发送天气和待办请求，例如：`查询杭州明天天气，并使用 todo 工具添加一条“带雨伞”待办。`
 2. 新建 `weekly-report`，发送周报和待办请求，例如“生成一份本周工作周报，并添加待办检查周报”。
 3. 切回 `weather-chat`，继续追问天气和待办。
 4. 切回 `weekly-report`，继续追问周报。
@@ -134,7 +134,7 @@ python -m mini_agent --session weather-chat
 python -m mini_agent --session weekly-report
 ```
 
-在终端 1 输入“查询杭州明天天气；如有雨，添加待办带雨伞”。在终端 2 输入“生成一份本周工作周报，并添加待办检查周报”。退出后，以相同的 `--session` 再打开两个窗口继续提问。两个 session 的消息、摘要、待办和 trace 都应保持隔离。
+在终端 1 输入：`查询杭州明天天气，并使用 todo 工具添加一条“带雨伞”待办。` 在终端 2 输入“生成一份本周工作周报，并添加待办检查周报”。退出后，以相同的 `--session` 再打开两个窗口继续提问。两个 session 的消息、摘要、待办和 trace 都应保持隔离。
 
 ## memory 什么时候召回
 
